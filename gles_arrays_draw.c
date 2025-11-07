@@ -467,7 +467,7 @@ void gliArrayFlush(void)
             }
             xgux_set_attrib_pointer(XGU_COLOR_ARRAY, format, vad->color_array_size, stride, array_ptr);
         } else {
-            xgux_set_attrib_pointer(XGU_COLOR_ARRAY, format, 0, stride, vad->color_array_ptr);
+            xgux_set_attrib_pointer(XGU_COLOR_ARRAY, XGU_FLOAT, 0, 0, 0);
         }
         vad->color_array_dirty = GL_FALSE;
     }
@@ -491,37 +491,41 @@ void gliArrayFlush(void)
             }
             xgux_set_attrib_pointer(XGU_NORMAL_ARRAY, format, 3, stride, array_ptr);
         } else {
-            xgux_set_attrib_pointer(XGU_NORMAL_ARRAY, format, 0, stride, vad->normal_array_ptr);
+            xgux_set_attrib_pointer(XGU_NORMAL_ARRAY, XGU_FLOAT, 0, 0, 0);
         }
         vad->normal_array_dirty = GL_FALSE;
     }
 
     // Texture
-    const GLenum active_texture = vad->client_active_texture - GL_TEXTURE0;
-    if (vad->texcoord_array_dirty[active_texture]) {
-        XguVertexArrayType format = _gl_enum_to_xgu_type(vad->texcoord_array_type[active_texture]);
-        unsigned int stride = vad->texcoord_array_stride[active_texture];
-        if (stride == 0) {
-            stride = vad->texcoord_array_size[active_texture] *
-                     _gl_enum_to_byte_size(vad->texcoord_array_type[active_texture]);
-        }
+    for (GLuint texture = 0; texture < GLI_MAX_TEXTURE_UNITS; texture++) {
+        const GLuint active_texture = texture;
+        if (vad->texcoord_array_dirty[active_texture]) {
+            const GLint texture_slot = XGU_TEXCOORD0_ARRAY + active_texture;
+            if (vad->texcoord_array_enabled[active_texture]) {
 
-        const GLint texture_slot = XGU_TEXCOORD0_ARRAY + active_texture;
-        if (vad->texcoord_array_enabled[active_texture]) {
-            // If a buffer is bound, get the actual data pointer from the buffer object then use the ptr as a offset
-            if (vad->texcoord_array_buffer_binding[active_texture] != 0) {
-                buffer_object_t *buffer = gliGetBufferObject(vad->texcoord_array_buffer_binding[active_texture]);
-                assert(buffer != NULL);
-                array_ptr =
-                    (void *)((uintptr_t)buffer->buffer_data + (uintptr_t)vad->texcoord_array_ptr[active_texture]);
+                XguVertexArrayType format = _gl_enum_to_xgu_type(vad->texcoord_array_type[active_texture]);
+                unsigned int stride = vad->texcoord_array_stride[active_texture];
+                if (stride == 0) {
+                    stride = vad->texcoord_array_size[active_texture] *
+                             _gl_enum_to_byte_size(vad->texcoord_array_type[active_texture]);
+                }
+
+                // If a buffer is bound, get the actual data pointer from the buffer object then use the ptr as a offset
+                if (vad->texcoord_array_buffer_binding[active_texture] != 0) {
+                    buffer_object_t *buffer = gliGetBufferObject(vad->texcoord_array_buffer_binding[active_texture]);
+                    assert(buffer != NULL);
+                    array_ptr =
+                        (void *)((uintptr_t)buffer->buffer_data + (uintptr_t)vad->texcoord_array_ptr[active_texture]);
+                } else {
+                    array_ptr = vad->texcoord_array_ptr[active_texture];
+                }
+                xgux_set_attrib_pointer(
+                    texture_slot, format, vad->texcoord_array_size[active_texture], stride, array_ptr);
             } else {
-                array_ptr = vad->texcoord_array_ptr[active_texture];
+                xgux_set_attrib_pointer(texture_slot, XGU_FLOAT, 0, 0, 0);
             }
-            xgux_set_attrib_pointer(texture_slot, format, vad->texcoord_array_size[active_texture], stride, array_ptr);
-        } else {
-            xgux_set_attrib_pointer(texture_slot, format, 0, stride, vad->texcoord_array_ptr[active_texture]);
+            vad->texcoord_array_dirty[active_texture] = GL_FALSE;
         }
-        vad->texcoord_array_dirty[active_texture] = GL_FALSE;
     }
 
     // Point Size
@@ -535,7 +539,7 @@ void gliArrayFlush(void)
         if (vad->point_size_array_enabled) {
             xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, format, 1, stride, vad->point_size_array_ptr);
         } else {
-            xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, format, 0, stride, vad->point_size_array_ptr);
+            xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, XGU_FLOAT, 0, 0, 0);
         }
         vad->point_size_array_dirty = GL_FALSE;
     }

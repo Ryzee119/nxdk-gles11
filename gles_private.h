@@ -210,6 +210,7 @@ typedef struct
     GLboolean rescale_normal_enabled;
     vec4 clip_plane[GLI_MAX_CLIP_PLANES];
     GLboolean clip_plane_enabled[GLI_MAX_CLIP_PLANES];
+    GLboolean clip_plane_dirty;
 } transformation_state_t;
 
 // Table 6.8 - Coloring
@@ -323,6 +324,7 @@ typedef struct
 typedef struct texture_object
 {
     GLuint texture_name;
+    GLboolean texture_object_dirty;
     const GLvoid *texture_2d; // This is implementation-defined image data
     GLenum min_filter;
     GLenum mag_filter;
@@ -335,6 +337,7 @@ typedef struct texture_object
 
 typedef struct
 {
+    GLboolean texture_unit_dirty;
     GLboolean texture_2d_enabled;
     GLuint texture_binding_2d;
     texture_object_t *bound_texture_object;

@@ -76,22 +76,24 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         return;
     }
 
-    // The texture object is bound to the active texture unit
+    // The texture object is bound to the active texture texture_unit
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
     // If the texture name is zero just unbind any texture currently bound to the target
     if (texture == 0) {
-        unit->texture_binding_2d = 0;
-        unit->bound_texture_object = &unit->unbound_texture_object;
+        texture_unit->texture_binding_2d = 0;
+        texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
+        texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
         return;
     }
 
-    // First check if the object already exists, if so just bind it to the unit and we are done
+    // First check if the object already exists, if so just bind it to the texture_unit and we are done
     texture_object_t *texture_object = find_texture_object(texture, NULL);
     if (texture_object != NULL) {
-        unit->texture_binding_2d = texture;
-        unit->bound_texture_object = texture_object;
+        texture_unit->texture_binding_2d = texture;
+        texture_unit->bound_texture_object = texture_object;
+        texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
         return;
     }
 
@@ -105,15 +107,16 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     // Initialize the texture object
     memset(texture_object, 0, sizeof(texture_object_t));
     texture_object->texture_name = texture;
+    texture_object->texture_object_dirty = GL_TRUE;
     texture_object->min_filter = GL_NEAREST_MIPMAP_LINEAR;
     texture_object->mag_filter = GL_LINEAR;
     texture_object->wrap_s = GL_REPEAT;
     texture_object->wrap_t = GL_REPEAT;
     texture_object->generate_mipmap = GL_FALSE;
 
-    // Bind the object to the unit
-    unit->texture_binding_2d = texture;
-    unit->bound_texture_object = texture_object;
+    // Bind the object to the texture_unit
+    texture_unit->texture_binding_2d = texture;
+    texture_unit->bound_texture_object = texture_object;
 
     // Add the object to the context's list
     texture_object->next = context->texture_environment.texture_objects;
@@ -146,10 +149,11 @@ GL_API void GL_APIENTRY glDeleteTextures(GLsizei n, const GLuint *textures)
 
             // If a texture that is currently bound is deleted, the binding reverts to 0
             for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
-                texture_unit_t *unit = &context->texture_environment.texture_units[u];
-                if (unit->texture_binding_2d == name) {
-                    unit->texture_binding_2d = 0;
-                    unit->bound_texture_object = &unit->unbound_texture_object;
+                texture_unit_t *texture_unit = &context->texture_environment.texture_units[u];
+                if (texture_unit->texture_binding_2d == name) {
+                    texture_unit->texture_binding_2d = 0;
+                    texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
+                    texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
                 }
             }
 
@@ -183,8 +187,8 @@ GL_API void GL_APIENTRY glTexParameteriv(GLenum target, GLenum pname, const GLin
     }
 
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
-    texture_object_t *texture_object = unit->bound_texture_object;
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
+    texture_object_t *texture_object = texture_unit->bound_texture_object;
 
     if (texture_object == NULL) {
         gliSetError(GL_INVALID_OPERATION);
@@ -229,6 +233,7 @@ GL_API void GL_APIENTRY glTexParameteriv(GLenum target, GLenum pname, const GLin
             gliSetError(GL_INVALID_ENUM);
             return;
     }
+    texture_object->texture_object_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glTexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
@@ -304,7 +309,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
     }
 
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
     switch (pname) {
         case GL_TEXTURE_ENV_MODE:
@@ -320,13 +325,13 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->tex_env_mode = (GLenum)params[0];
+            texture_unit->tex_env_mode = (GLenum)params[0];
             break;
         case GL_TEXTURE_ENV_COLOR:
-            unit->tex_env_color[0] = INT_TO_FLOAT(params[0]);
-            unit->tex_env_color[1] = INT_TO_FLOAT(params[1]);
-            unit->tex_env_color[2] = INT_TO_FLOAT(params[2]);
-            unit->tex_env_color[3] = INT_TO_FLOAT(params[3]);
+            texture_unit->tex_env_color[0] = INT_TO_FLOAT(params[0]);
+            texture_unit->tex_env_color[1] = INT_TO_FLOAT(params[1]);
+            texture_unit->tex_env_color[2] = INT_TO_FLOAT(params[2]);
+            texture_unit->tex_env_color[3] = INT_TO_FLOAT(params[3]);
             break;
         case GL_COMBINE_RGB:
             switch (params[0]) {
@@ -343,7 +348,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_rgb_function = (GLenum)params[0];
+            texture_unit->combine_rgb_function = (GLenum)params[0];
             break;
         case GL_COMBINE_ALPHA:
             switch (params[0]) {
@@ -358,7 +363,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_alpha_function = (GLenum)params[0];
+            texture_unit->combine_alpha_function = (GLenum)params[0];
             break;
 
         case GL_SRC0_RGB:
@@ -375,7 +380,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_rgb_source[index] = (GLenum)params[0];
+            texture_unit->combine_rgb_source[index] = (GLenum)params[0];
         } break;
 
         case GL_SRC0_ALPHA:
@@ -392,7 +397,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_alpha_source[index] = (GLenum)params[0];
+            texture_unit->combine_alpha_source[index] = (GLenum)params[0];
         } break;
 
         case GL_OPERAND0_RGB:
@@ -409,7 +414,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_rgb_operand[index] = (GLenum)params[0];
+            texture_unit->combine_rgb_operand[index] = (GLenum)params[0];
         } break;
 
         case GL_OPERAND0_ALPHA:
@@ -424,7 +429,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                     gliSetError(GL_INVALID_ENUM);
                     return;
             }
-            unit->combine_alpha_operand[index] = (GLenum)params[0];
+            texture_unit->combine_alpha_operand[index] = (GLenum)params[0];
         } break;
 
         case GL_RGB_SCALE:
@@ -432,7 +437,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                 gliSetError(GL_INVALID_VALUE);
                 return;
             }
-            unit->rgb_scale = (GLfloat)params[0];
+            texture_unit->rgb_scale = (GLfloat)params[0];
             break;
 
         case GL_ALPHA_SCALE:
@@ -440,17 +445,18 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
                 gliSetError(GL_INVALID_VALUE);
                 return;
             }
-            unit->alpha_scale = (GLfloat)params[0];
+            texture_unit->alpha_scale = (GLfloat)params[0];
             break;
 
         case GL_COORD_REPLACE_OES:
-            unit->coord_replace_oes = (params[0]) ? GL_TRUE : GL_FALSE;
+            texture_unit->coord_replace_oes = (params[0]) ? GL_TRUE : GL_FALSE;
             break;
 
         default:
             gliSetError(GL_INVALID_ENUM);
             return;
     }
+    texture_unit->texture_unit_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *params)
@@ -468,7 +474,7 @@ GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *p
     }
 
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
     if (!params) {
         gliSetError(GL_INVALID_VALUE);
@@ -478,8 +484,9 @@ GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *p
     switch (pname) {
         case GL_TEXTURE_ENV_COLOR:
             for (GLint i = 0; i < 4; i++) {
-                unit->tex_env_color[i] = params[i];
+                texture_unit->tex_env_color[i] = params[i];
             }
+            texture_unit->texture_unit_dirty = GL_TRUE;
             return;
         default:
             break;
@@ -549,8 +556,8 @@ GL_API void GL_APIENTRY glGetTexParameteriv(GLenum target, GLenum pname, GLint *
     }
 
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
-    texture_object_t *texture_object = unit->bound_texture_object;
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
+    texture_object_t *texture_object = texture_unit->bound_texture_object;
 
     assert(texture_object != NULL);
 
@@ -608,55 +615,55 @@ GL_API void GL_APIENTRY glGetTexEnviv(GLenum target, GLenum pname, GLint *params
     }
 
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
     switch (pname) {
         case GL_TEXTURE_ENV_MODE:
-            params[0] = (GLint)unit->tex_env_mode;
+            params[0] = (GLint)texture_unit->tex_env_mode;
             break;
         case GL_TEXTURE_ENV_COLOR:
             for (GLint i = 0; i < 4; i++) {
-                params[i] = FLOAT_TO_INT(unit->tex_env_color[i]);
+                params[i] = FLOAT_TO_INT(texture_unit->tex_env_color[i]);
             }
             break;
         case GL_COMBINE_RGB:
-            params[0] = (GLint)unit->combine_rgb_function;
+            params[0] = (GLint)texture_unit->combine_rgb_function;
             break;
         case GL_COMBINE_ALPHA:
-            params[0] = (GLint)unit->combine_alpha_function;
+            params[0] = (GLint)texture_unit->combine_alpha_function;
             break;
         case GL_SRC0_RGB:
         case GL_SRC1_RGB:
         case GL_SRC2_RGB: {
             const GLint index = pname - GL_SRC0_RGB;
-            params[0] = (GLint)unit->combine_rgb_source[index];
+            params[0] = (GLint)texture_unit->combine_rgb_source[index];
         } break;
         case GL_SRC0_ALPHA:
         case GL_SRC1_ALPHA:
         case GL_SRC2_ALPHA: {
             const GLint index = pname - GL_SRC0_ALPHA;
-            params[0] = (GLint)unit->combine_alpha_source[index];
+            params[0] = (GLint)texture_unit->combine_alpha_source[index];
         } break;
         case GL_OPERAND0_RGB:
         case GL_OPERAND1_RGB:
         case GL_OPERAND2_RGB: {
             const GLint index = pname - GL_OPERAND0_RGB;
-            params[0] = (GLint)unit->combine_rgb_operand[index];
+            params[0] = (GLint)texture_unit->combine_rgb_operand[index];
         } break;
         case GL_OPERAND0_ALPHA:
         case GL_OPERAND1_ALPHA:
         case GL_OPERAND2_ALPHA: {
             const GLint index = pname - GL_OPERAND0_ALPHA;
-            params[0] = (GLint)unit->combine_alpha_operand[index];
+            params[0] = (GLint)texture_unit->combine_alpha_operand[index];
         } break;
         case GL_RGB_SCALE:
-            params[0] = (GLint)(unit->rgb_scale);
+            params[0] = (GLint)(texture_unit->rgb_scale);
             break;
         case GL_ALPHA_SCALE:
-            params[0] = (GLint)(unit->alpha_scale);
+            params[0] = (GLint)(texture_unit->alpha_scale);
             break;
         case GL_COORD_REPLACE_OES:
-            params[0] = unit->coord_replace_oes ? 1 : 0;
+            params[0] = texture_unit->coord_replace_oes ? 1 : 0;
             break;
         default:
             gliSetError(GL_INVALID_ENUM);
@@ -674,10 +681,10 @@ GL_API void GL_APIENTRY glGetTexEnvfv(GLenum target, GLenum pname, GLfloat *para
 
     // Handle special case of TEXURE_ENV_COLOR first
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *unit = &context->texture_environment.texture_units[texture_index];
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
     if (pname == GL_TEXTURE_ENV_COLOR) {
         for (GLint i = 0; i < 4; i++) {
-            params[i] = unit->tex_env_color[i];
+            params[i] = texture_unit->tex_env_color[i];
         }
         return;
     }
@@ -878,6 +885,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
     texture_object_t *texture_object = texture_unit->bound_texture_object;
     texture_object->texture_2d = xgu_texture;
+    texture_object->texture_object_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
@@ -890,6 +898,7 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
                                         GLenum type,
                                         const void *pixels)
 {
+    assert(0 && "glTexSubImage2D not implemented yet");
     (void)target;
     (void)level;
     (void)xoff;
@@ -910,6 +919,7 @@ GL_API void GL_APIENTRY glCompressedTexImage2D(GLenum target,
                                                GLsizei imageSize,
                                                const void *data)
 {
+    assert(0 && "glCompressedTexImage2D not implemented yet");
     (void)target;
     (void)level;
     (void)internalformat;
@@ -930,6 +940,7 @@ GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
                                                   GLsizei imageSize,
                                                   const void *data)
 {
+    assert(0 && "glCompressedTexSubImage2D not implemented yet");
     (void)target;
     (void)level;
     (void)xoff;
@@ -944,6 +955,7 @@ GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
 GL_API void GL_APIENTRY glCopyTexImage2D(
     GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)
 {
+    assert(0 && "glCopyTexImage2D not implemented yet");
     (void)target;
     (void)level;
     (void)internalformat;
@@ -957,6 +969,7 @@ GL_API void GL_APIENTRY glCopyTexImage2D(
 GL_API void GL_APIENTRY
 glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei w, GLsizei h)
 {
+    assert(0 && "glCopyTexSubImage2D not implemented yet");
     (void)target;
     (void)level;
     (void)xoff;
@@ -970,7 +983,6 @@ glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x,
 void gliTextureFlush(void)
 {
     gli_context_t *context = gliGetContext();
-    combiner_set_texture_env();
 
     // Update texture bindings
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
@@ -978,6 +990,10 @@ void gliTextureFlush(void)
         texture_object_t *texture_object = texture_unit->bound_texture_object;
 
         if (!texture_unit->texture_2d_enabled) {
+            continue;
+        }
+
+        if (!texture_object->texture_object_dirty) {
             continue;
         }
 
@@ -1010,4 +1026,6 @@ void gliTextureFlush(void)
         pb = xgu_set_texture_address(pb, i, u, (u == XGU_WRAP), v, (v == XGU_WRAP), XGU_CLAMP_TO_EDGE, false, false);
         pb_end(pb);
     }
+
+    combiner_set_texture_env();
 }

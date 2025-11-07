@@ -291,6 +291,8 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             // glTexImage2D, glCompressedTexImage2D, and glCopyTexImage2D.
             const GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
             context->texture_environment.texture_units[texture_index].texture_2d_enabled = enable;
+            context->texture_environment.texture_units[texture_index].texture_unit_dirty = GL_TRUE;
+
             // FIXME. Do i need to do anything else
             break;
         default:
@@ -421,11 +423,7 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
         nv_clear_mask |= NV097_CLEAR_SURFACE_STENCIL;
     }
 
-    const GLint rc = (GLint)(context->framebuffer_control.clear_color[0] * 255.0f);
-    const GLint gc = (GLint)(context->framebuffer_control.clear_color[1] * 255.0f);
-    const GLint bc = (GLint)(context->framebuffer_control.clear_color[2] * 255.0f);
-    const GLint ac = (GLint)(context->framebuffer_control.clear_color[3] * 255.0f);
-    const uint32_t nv_clear_color = (ac << 24) | (rc << 16) | (gc << 8) | bc; // ARGB
+    const uint32_t nv_clear_color = FLOAT4_TO_PACKED_ARGB32(context->framebuffer_control.clear_color);
 
     DWORD zstencil =
         (context->framebuffer_control.clear_stencil & 0xFF) |
@@ -693,6 +691,7 @@ void glContextInit(GLint window_width, GLint window_height)
         glm_vec4_copy(GLM_VEC4_ZERO, context->transformation_state.clip_plane[i]);
         context->transformation_state.clip_plane_enabled[i] = GL_FALSE;
     }
+    context->transformation_state.clip_plane_dirty = GL_TRUE;
 
     /* --- Table 6.8: Coloring (fog & shading) --- */
     glm_vec4_copy(GLM_VEC4_ZERO, context->coloring_state.fog_color);
@@ -826,39 +825,41 @@ void glContextInit(GLint window_width, GLint window_height)
 
     // Set up default texture unit that is used for all units initially
     for (GLint i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
-        texture_unit_t *unit = &context->texture_environment.texture_units[i];
-        unit->texture_2d_enabled = GL_FALSE;
-        unit->bound_texture_object = &unit->unbound_texture_object;
+        texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
+        texture_unit->texture_unit_dirty = GL_TRUE;
+        texture_unit->texture_2d_enabled = GL_FALSE;
+        texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
         {
             // According to spec all texture units have same default texture binding with 0 name
-            unit->unbound_texture_object.texture_name = 0;
-            unit->unbound_texture_object.min_filter = GL_NEAREST_MIPMAP_LINEAR;
-            unit->unbound_texture_object.mag_filter = GL_LINEAR;
-            unit->unbound_texture_object.wrap_s = GL_REPEAT;
-            unit->unbound_texture_object.wrap_t = GL_REPEAT;
-            unit->unbound_texture_object.generate_mipmap = GL_FALSE;
+            texture_unit->unbound_texture_object.texture_name = 0;
+            texture_unit->unbound_texture_object.texture_object_dirty = GL_TRUE;
+            texture_unit->unbound_texture_object.min_filter = GL_NEAREST_MIPMAP_LINEAR;
+            texture_unit->unbound_texture_object.mag_filter = GL_LINEAR;
+            texture_unit->unbound_texture_object.wrap_s = GL_REPEAT;
+            texture_unit->unbound_texture_object.wrap_t = GL_REPEAT;
+            texture_unit->unbound_texture_object.generate_mipmap = GL_FALSE;
         }
-        unit->texture_binding_2d = 0;
-        unit->tex_env_mode = GL_MODULATE;
-        unit->coord_replace_oes = GL_FALSE;
-        glm_vec4_zero(unit->tex_env_color);
+        texture_unit->texture_binding_2d = 0;
+        texture_unit->tex_env_mode = GL_MODULATE;
+        texture_unit->coord_replace_oes = GL_FALSE;
+        glm_vec4_zero(texture_unit->tex_env_color);
 
-        unit->combine_rgb_function = GL_MODULATE;
-        unit->combine_alpha_function = GL_MODULATE;
-        unit->combine_rgb_source[0] = GL_TEXTURE;
-        unit->combine_rgb_source[1] = GL_PREVIOUS;
-        unit->combine_rgb_source[2] = GL_CONSTANT;
-        unit->combine_alpha_source[0] = GL_TEXTURE;
-        unit->combine_alpha_source[1] = GL_PREVIOUS;
-        unit->combine_alpha_source[2] = GL_CONSTANT;
-        unit->combine_rgb_operand[0] = GL_SRC_COLOR;
-        unit->combine_rgb_operand[1] = GL_SRC_COLOR;
-        unit->combine_rgb_operand[2] = GL_SRC_ALPHA;
-        unit->combine_alpha_operand[0] = GL_SRC_ALPHA;
-        unit->combine_alpha_operand[1] = GL_SRC_ALPHA;
-        unit->combine_alpha_operand[2] = GL_SRC_ALPHA;
-        unit->rgb_scale = 1.0f;
-        unit->alpha_scale = 1.0f;
+        texture_unit->combine_rgb_function = GL_MODULATE;
+        texture_unit->combine_alpha_function = GL_MODULATE;
+        texture_unit->combine_rgb_source[0] = GL_TEXTURE;
+        texture_unit->combine_rgb_source[1] = GL_PREVIOUS;
+        texture_unit->combine_rgb_source[2] = GL_CONSTANT;
+        texture_unit->combine_alpha_source[0] = GL_TEXTURE;
+        texture_unit->combine_alpha_source[1] = GL_PREVIOUS;
+        texture_unit->combine_alpha_source[2] = GL_CONSTANT;
+        texture_unit->combine_rgb_operand[0] = GL_SRC_COLOR;
+        texture_unit->combine_rgb_operand[1] = GL_SRC_COLOR;
+        texture_unit->combine_rgb_operand[2] = GL_SRC_ALPHA;
+        texture_unit->combine_alpha_operand[0] = GL_SRC_ALPHA;
+        texture_unit->combine_alpha_operand[1] = GL_SRC_ALPHA;
+        texture_unit->combine_alpha_operand[2] = GL_SRC_ALPHA;
+        texture_unit->rgb_scale = 1.0f;
+        texture_unit->alpha_scale = 1.0f;
     }
 
     /* --- Table 6.16: Per-fragment / pixel ops --- */
@@ -922,6 +923,15 @@ void glContextInit(GLint window_width, GLint window_height)
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClearDepthf(1.0f);
     glClearStencil(0);
+
+    pb = pb_begin();
+    const float m_identity[4 * 4] = {
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    for (GLuint i = 0, ofs = 0; i < 4; ++i, ofs += 4 * 4 * 4) {
+        pb = pb_push1(pb, NV20_TCL_PRIMITIVE_3D_TX_ENABLE(i), 0x0003FFC0);
+        pb = push_command_matrix4x4(pb, NV097_SET_TEXTURE_MATRIX + ofs, m_identity);
+    }
+    pb_end(pb);
 
     gliFlushStateChange();
 }

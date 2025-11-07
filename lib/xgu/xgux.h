@@ -107,7 +107,7 @@ XGUX_API
 void xgux_set_attrib_pointer(XguVertexArray index, XguVertexArrayType format, unsigned int size, unsigned int stride, const void* data) {
     uint32_t *p = pb_begin();
     p = xgu_set_vertex_data_array_format(p, index, format, size, stride);
-    p = xgu_set_vertex_data_array_offset(p, index, (void*)((uint32_t)data & 0x03ffffff));
+    p = xgu_set_vertex_data_array_offset(p, index, (void*)((uint32_t)MmGetPhysicalAddress((PVOID)data)));
     pb_end(p);
 }
 

@@ -7,7 +7,8 @@
 #include <swizzle.h>
 
 #define GLI_MAX_LIGHTS XGU_LIGHT_COUNT
-#define GLI_MAX_TEXTURE_UNITS XGU_TEXTURE_COUNT
+#define GLI_MAX_TEXTURE_UNITS (XGU_TEXTURE_COUNT - 1) // We reserve one texture unit for user clip planes
+#define GLI_MAX_CLIP_PLANES 4 // One texture unit can handle 4 planes.
 #define GLI_MAX_TEXTURE_SIZE 4096
 #define GLI_VENDOR_STRING "nxdk GLES Renderer"
 #define GLI_RENDERER_STRING "nv2a-based GPU"
@@ -60,6 +61,12 @@ typedef struct xgu_texture
 } xgu_texture_t;
 
 #define PHYSICAL_MEMORY(x) ((void *)((uintptr_t)x & 0x03FFFFFF))
+
+#define FLOAT4_TO_PACKED_ARGB32(f) \
+    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | \
+     (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 16) | \
+     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) |  \
+     (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 0))
 
 static inline uint32_t npot2pot(uint32_t num)
 {

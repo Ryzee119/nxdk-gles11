@@ -246,7 +246,7 @@ GL_API void GL_APIENTRY glDepthRangex(GLfixed n, GLfixed f)
 
 GL_API void GL_APIENTRY glClipPlanef(GLenum p, const GLfloat *eqn)
 {
-    gli_context_t *c = gliGetContext();
+    gli_context_t *context = gliGetContext();
 
     if (p < GL_CLIP_PLANE0 || p >= GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES) {
         gliSetError(GL_INVALID_ENUM);
@@ -254,10 +254,32 @@ GL_API void GL_APIENTRY glClipPlanef(GLenum p, const GLfloat *eqn)
     }
 
     const GLuint plane_index = p - GL_CLIP_PLANE0;
-    c->transformation_state.clip_plane_enabled[plane_index] = GL_TRUE;
-    glm_vec4_copy((float *)eqn, c->transformation_state.clip_plane[plane_index]);
 
-    // FIXME: how to do on NV2A. I think i need to do manually
+    // When glClipPlane is called, the coefficients given by equation are transformed by the inverse of the modelview
+    // matrix and stored in the resulting eye coordinates
+
+    // Current modelview matrix
+    mat4 *modelview = &context->transformation_state
+                           .modelview_matrix_stack[
+                               context->transformation_state.modelview_matrix_stack_depth - 1];
+
+    // Inverse-transpose of modelview
+    mat4 inv;
+    glm_mat4_inv(*modelview, inv);      // inv = M^{-1}
+    glm_mat4_transpose(inv);            // inv = (M^{-1})^T
+
+    // Load eqn into a vec4 (A,B,C,D)
+    vec4 eqn_vec;
+    glm_vec4_make(eqn, eqn_vec);
+
+    // Transform to eye coords
+    vec4 transformed_eqn;
+    glm_mat4_mulv(inv, eqn_vec, transformed_eqn);
+
+    // Store in context as eye-space plane
+    glm_vec4_copy(transformed_eqn,
+                  context->transformation_state.clip_plane[plane_index]);
+    context->transformation_state.clip_plane_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glClipPlanex(GLenum p, const GLfixed *eqn)
@@ -357,7 +379,7 @@ void gliTransformFlush(void)
         glm_mat4_mulN((mat4 *[]){viewport, projection, modelview}, 3, mvp);
 
         uint32_t *pb = pb_begin();
-        pb = pb_push_transposed_matrix(pb, NV097_SET_PROJECTION_MATRIX, (const float *)*projection);
+        // pb = pb_push_transposed_matrix(pb, NV097_SET_PROJECTION_MATRIX, (const float *)*projection);
         pb = pb_push_transposed_matrix(pb, NV097_SET_COMPOSITE_MATRIX, (const float *)*mvp);
         pb_end(pb);
 
