@@ -64,7 +64,6 @@ GL_API void GL_APIENTRY glHint(GLenum target, GLenum mode)
         return;
     }
 
-    // FIXME, deal with these? GL_FASTEST/ GL_NICEST/ GL_DONT_CARE
     switch (target) {
         case GL_FOG_HINT:
             context->hints_state.fog_hint = mode;
@@ -146,9 +145,8 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             context->pixel_ops_state.color_logic_op_enabled = enable;
             pb = push_command_boolean(pb, NV097_SET_LOGIC_OP_ENABLE, enable);
             break;
-        case GL_CLIP_PLANE0 ... GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES:
+        case GL_CLIP_PLANE0 ... GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES - 1:
             // If enabled, clip geometry against user-defined clipping plane i. See glClipPlane.
-            // FIXME, how to do on NV2A. I think i need to do manually
             const GLuint plane = cap - GL_CLIP_PLANE0;
             context->transformation_state.clip_plane_enabled[plane] = enable;
             break;
@@ -192,7 +190,7 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             pb = combiner_specular_fog_config(
                 pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
             break;
-        case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS:
+        case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS - 1:
             // If enabled, include light i in the evaluation of the lighting equation. See glLightModel and glLight.
             const GLuint light = cap - GL_LIGHT0;
             context->lighting_state.lights[light].enabled = enable;
@@ -292,8 +290,6 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             const GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
             context->texture_environment.texture_units[texture_index].texture_2d_enabled = enable;
             context->texture_environment.texture_units[texture_index].texture_unit_dirty = GL_TRUE;
-
-            // FIXME. Do i need to do anything else
             break;
         default:
             gliSetError(GL_INVALID_ENUM);
@@ -647,8 +643,6 @@ void glContextInit(GLint window_width, GLint window_height)
     context->vertex_array_data.element_array_buffer_binding = 0;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBufferData(GL_ARRAY_BUFFER, 0, NULL, GL_STATIC_DRAW);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 0, NULL, GL_STATIC_DRAW);
 
     /* --- Table 6.6: Buffer object state registry --- */
     context->buffer_objects = NULL;
@@ -780,8 +774,8 @@ void glContextInit(GLint window_width, GLint window_height)
     /* Points */
     context->rasterization_state.point_size = 1.0f;
     context->rasterization_state.point_smooth_enabled = GL_FALSE;
-    context->rasterization_state.point_size_min = 1.0f; /* impl-dependent; 1.0 is safe */
-    context->rasterization_state.point_size_max = 1.0f; /* impl-dependent; 1.0 is safe */
+    context->rasterization_state.point_size_min = 1.0f;
+    context->rasterization_state.point_size_max = GLI_MAX_ALIASED_POINT_SIZE;
     context->rasterization_state.point_fade_threshold_size = 1.0f;
     context->rasterization_state.point_distance_attenuation[0] = 1.0f;
     context->rasterization_state.point_distance_attenuation[1] = 0.0f;
@@ -866,8 +860,8 @@ void glContextInit(GLint window_width, GLint window_height)
     context->pixel_ops_state.scissor_test_enabled = GL_FALSE;
     context->pixel_ops_state.scissor_box[0] = 0;
     context->pixel_ops_state.scissor_box[1] = 0;
-    context->pixel_ops_state.scissor_box[2] = 0;
-    context->pixel_ops_state.scissor_box[3] = 0;
+    context->pixel_ops_state.scissor_box[2] = window_width;
+    context->pixel_ops_state.scissor_box[3] = window_height;
     glDisable(GL_SCISSOR_TEST);
 
     context->pixel_ops_state.alpha_test_enabled = GL_FALSE;

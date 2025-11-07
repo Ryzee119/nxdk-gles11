@@ -58,14 +58,19 @@ GL_API void GL_APIENTRY glLineWidth(GLfloat width)
 {
     gli_context_t *context = gliGetContext();
 
+    if (width <= 0.0f) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
     if (context->rasterization_state.line_smooth_enabled) {
         width = glm_clamp(width,
-                      context->implementation_limits.antialiased_line_width_range[0],
-                      context->implementation_limits.antialiased_line_width_range[1]);
+                          context->implementation_limits.antialiased_line_width_range[0],
+                          context->implementation_limits.antialiased_line_width_range[1]);
     } else {
         width = glm_clamp(width,
-                      context->implementation_limits.aliased_line_width_range[0],
-                      context->implementation_limits.aliased_line_width_range[1]);
+                          context->implementation_limits.aliased_line_width_range[0],
+                          context->implementation_limits.aliased_line_width_range[1]);
     }
 
     context->rasterization_state.line_width = width;
@@ -78,21 +83,26 @@ GL_API void GL_APIENTRY glLineWidth(GLfloat width)
 GL_API void GL_APIENTRY glLineWidthx(GLfixed width)
 {
     GLfloat widthf = gliFixedtoFloat(width);
-    glLineWidth(width);
+    glLineWidth(widthf);
 }
 
 GL_API void GL_APIENTRY glPointSize(GLfloat size)
 {
     gli_context_t *context = gliGetContext();
 
+    if (size <= 0.0f) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
     if (context->rasterization_state.point_smooth_enabled) {
         size = glm_clamp(size,
-                     context->implementation_limits.antialiased_point_size_range[0],
-                     context->implementation_limits.antialiased_point_size_range[1]);
+                         context->implementation_limits.antialiased_point_size_range[0],
+                         context->implementation_limits.antialiased_point_size_range[1]);
     } else {
         size = glm_clamp(size,
-                     context->implementation_limits.aliased_point_size_range[0],
-                     context->implementation_limits.aliased_point_size_range[1]);
+                         context->implementation_limits.aliased_point_size_range[0],
+                         context->implementation_limits.aliased_point_size_range[1]);
     }
 
     context->rasterization_state.point_size = size;
@@ -105,7 +115,7 @@ GL_API void GL_APIENTRY glPointSize(GLfloat size)
 GL_API void GL_APIENTRY glPointSizex(GLfixed size)
 {
     GLfloat sizef = gliFixedtoFloat(size);
-    glLineWidth(sizef);
+    glPointSize(sizef);
 }
 
 GL_API void GL_APIENTRY glPointParameterf(GLenum pname, GLfloat param)
@@ -119,7 +129,6 @@ GL_API void GL_APIENTRY glPointParameterf(GLenum pname, GLfloat param)
     }
 
     uint32_t *pb = pb_begin();
-    pb = push_command_boolean(pb, NV097_SET_POINT_PARAMS_ENABLE, GL_TRUE);
     GLfloat range = r->point_size_max - r->point_size_min;
 
     switch (pname) {
@@ -143,8 +152,10 @@ GL_API void GL_APIENTRY glPointParameterf(GLenum pname, GLfloat param)
             break;
         default:
             gliSetError(GL_INVALID_ENUM);
-            break;
+            pb_end(pb);
+            return;
     }
+    pb = push_command_boolean(pb, NV097_SET_POINT_PARAMS_ENABLE, GL_TRUE);
     pb_end(pb);
 }
 
@@ -153,6 +164,11 @@ GL_API void GL_APIENTRY glPointParameterfv(GLenum pname, const GLfloat *params)
     gli_context_t *context = gliGetContext();
     rasterization_state_t *r = &context->rasterization_state;
     transformation_state_t *t = &context->transformation_state;
+
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
 
     if (pname == GL_POINT_DISTANCE_ATTENUATION) {
         r->point_distance_attenuation[0] = params[0];
@@ -184,8 +200,11 @@ GL_API void GL_APIENTRY glPointParameterx(GLenum pname, GLfixed param)
 
 GL_API void GL_APIENTRY glPointParameterxv(GLenum pname, const GLfixed *params)
 {
-    (void)pname;
-    (void)params;
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
     GLfloat paramsf[3];
     GLuint param_count = (pname == GL_POINT_DISTANCE_ATTENUATION) ? 3 : 1;
     for (int i = 0; i < param_count; i++) {

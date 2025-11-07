@@ -3,7 +3,6 @@
 GL_API void GL_APIENTRY glFogf(GLenum pname, GLfloat param)
 {
     gli_context_t *context = gliGetContext();
-    uint32_t *pb;
 
     switch (pname) {
         case GL_FOG_MODE:
@@ -40,7 +39,6 @@ GL_API void GL_APIENTRY glFogf(GLenum pname, GLfloat param)
 GL_API void GL_APIENTRY glFogfv(GLenum pname, const GLfloat *params)
 {
     gli_context_t *context = gliGetContext();
-    uint32_t *pb;
 
     switch (pname) {
         case GL_FOG_COLOR:
@@ -64,7 +62,7 @@ GL_API void GL_APIENTRY glFogxv(GLenum pname, const GLfixed *params)
 {
     GLfloat paramsf[4];
     GLuint param_count = (pname == GL_FOG_COLOR) ? 4 : 1;
-    for (int i = 0; i < param_count; i++) {
+    for (GLuint i = 0; i < param_count; i++) {
         paramsf[i] = gliFixedtoFloat(params[i]);
     }
     glFogfv(pname, paramsf);
@@ -74,17 +72,11 @@ void gliFogFlush(void)
 {
     gli_context_t *context = gliGetContext();
     coloring_state_t *cs = &context->coloring_state;
-    uint32_t *pb = pb_begin();
-    pb = xgu_set_fog_gen_mode(pb, XGU_FOG_GEN_MODE_RADIAL);
-    pb_end(pb);
+    uint32_t *pb;
 
     if (cs->fog_color_dirty) {
 
-        uint32_t r = (uint32_t)(cs->fog_color[0] * 255.0f) & 0xFF;
-        uint32_t g = (uint32_t)(cs->fog_color[1] * 255.0f) & 0xFF;
-        uint32_t b = (uint32_t)(cs->fog_color[2] * 255.0f) & 0xFF;
-        uint32_t a = (uint32_t)(cs->fog_color[3] * 255.0f) & 0xFF;
-        uint32_t color = (a << 24) | (b << 16) | (g << 8) | r;
+        uint32_t color = FLOAT4_TO_PACKED_ABGR32(cs->fog_color);
         pb = pb_begin();
         pb = xgu_set_fog_color(pb, color);
         pb_end(pb);
@@ -94,7 +86,7 @@ void gliFogFlush(void)
     if (cs->fog_density_dirty || cs->fog_start_dirty || cs->fog_end_dirty || cs->fog_mode_dirty) {
 
         if (cs->fog_mode_dirty) {
-            uint32_t *pb = pb_begin();
+            pb = pb_begin();
             pb = xgu_set_fog_mode(pb, _gl_enum_to_xgu_fog_mode(cs->fog_mode));
             pb_end(pb);
             cs->fog_mode_dirty = GL_FALSE;
@@ -141,8 +133,12 @@ void gliFogFlush(void)
                 return;
         }
 
-        uint32_t *pb = pb_begin();
+        pb = pb_begin();
         pb = xgu_set_fog_params(pb, bias, scale);
         pb_end(pb);
+
+        cs->fog_density_dirty = GL_FALSE;
+        cs->fog_start_dirty = GL_FALSE;
+        cs->fog_end_dirty = GL_FALSE;
     }
 }

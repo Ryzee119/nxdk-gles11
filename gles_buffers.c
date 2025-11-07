@@ -44,7 +44,7 @@ buffer_object_t *gliGetBufferObject(GLuint name)
 GL_API void GL_APIENTRY glGenBuffers(GLsizei n, GLuint *buffers)
 {
     if (buffers == NULL) {
-        gliSetError(GL_INVALID_OPERATION);
+        gliSetError(GL_INVALID_VALUE);
         return;
     }
     if (n < 0) {

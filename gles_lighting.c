@@ -95,7 +95,7 @@ GL_API void GL_APIENTRY glLightfv(GLenum light, GLenum pname, const GLfloat *par
             break;
         }
         default:
-            glLightf(light, pname, params[0]);
+            gliSetError(GL_INVALID_ENUM);
             break;
     }
 }
@@ -159,7 +159,8 @@ GL_API void GL_APIENTRY glLightModelfv(GLenum pname, const GLfloat *params)
             context->lighting_state.light_model_two_side_dirty = GL_TRUE;
             break;
         default:
-            glLightModelf(pname, params[0]);
+            gliSetError(GL_INVALID_ENUM);
+            return;
     }
 }
 
@@ -176,21 +177,27 @@ GL_API void GL_APIENTRY glLightModelx(GLenum pname, GLfixed param)
 
 GL_API void GL_APIENTRY glLightModelxv(GLenum pname, const GLfixed *params)
 {
-    GLint param_count = 1;
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
 
     switch (pname) {
-        case GL_LIGHT_MODEL_AMBIENT:
-            param_count = 4;
-            break;
+        case GL_LIGHT_MODEL_AMBIENT: {
+            GLfloat paramsf[4];
+            for (int i = 0; i < 4; ++i) {
+                paramsf[i] = gliFixedtoFloat(params[i]);
+            }
+            glLightModelfv(pname, paramsf);
+            return;
+        }
+        case GL_LIGHT_MODEL_TWO_SIDE:
+            glLightModelf(pname, gliFixedtoFloat(params[0]));
+            return;
         default:
-            glLightModelf(pname, params[0]);
+            gliSetError(GL_INVALID_ENUM);
             return;
     }
-    GLfloat paramsf[4];
-    for (GLint i = 0; i < param_count; i++) {
-        paramsf[i] = (GLfloat)gliFixedtoFloat(params[i]);
-    }
-    glLightModelfv(pname, paramsf);
 }
 
 GL_API void GL_APIENTRY glMaterialfv(GLenum face, GLenum pname, const GLfloat *params)
@@ -392,6 +399,11 @@ GL_API void GL_APIENTRY glGetMaterialfv(GLenum face, GLenum pname, GLfloat *para
 {
     gli_context_t *context = gliGetContext();
 
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
     material_t *material;
     switch (face) {
         case GL_FRONT:
@@ -568,11 +580,15 @@ void gliLightingFlush(void)
             material_t *material = materials[j];
             // Apply light colour and material color
             if (light->diffuse_dirty || material->diffuse_dirty) {
-                // Fixme: only multiply by material if material diffuse comes from material (Could be from diffuse
-                // vertex) See GL_COLOR_MATERIAL
-                xgu_v.r = light->diffuse[0] * material->diffuse[0];
-                xgu_v.g = light->diffuse[1] * material->diffuse[1];
-                xgu_v.b = light->diffuse[2] * material->diffuse[2];
+                if (!context->lighting_state.color_material_enabled) {
+                    xgu_v.r = light->diffuse[0] * material->diffuse[0];
+                    xgu_v.g = light->diffuse[1] * material->diffuse[1];
+                    xgu_v.b = light->diffuse[2] * material->diffuse[2];
+                } else {
+                    xgu_v.r = light->diffuse[0];
+                    xgu_v.g = light->diffuse[1];
+                    xgu_v.b = light->diffuse[2];
+                }
                 if (j == 0) {
                     pb = xgu_set_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
                 } else {
@@ -582,11 +598,15 @@ void gliLightingFlush(void)
 
             // Light ambient and material ambient
             if (light->ambient_dirty || material->ambient_dirty) {
-                // Fixme: only multiply by material if material ambient comes from material (Could be from diffuse
-                // vertex) See GL_COLOR_MATERIAL
-                xgu_v.r = light->ambient[0] * material->ambient[0];
-                xgu_v.g = light->ambient[1] * material->ambient[1];
-                xgu_v.b = light->ambient[2] * material->ambient[2];
+                if (!context->lighting_state.color_material_enabled) {
+                    xgu_v.r = light->ambient[0] * material->ambient[0];
+                    xgu_v.g = light->ambient[1] * material->ambient[1];
+                    xgu_v.b = light->ambient[2] * material->ambient[2];
+                } else {
+                    xgu_v.r = light->ambient[0];
+                    xgu_v.g = light->ambient[1];
+                    xgu_v.b = light->ambient[2];
+                }
                 if (j == 0) {
                     pb = xgu_set_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
                 } else {

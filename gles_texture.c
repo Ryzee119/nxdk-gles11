@@ -1,4 +1,4 @@
-// gles_texture.c
+// FIXME GL_POINT_SPRITE_OES
 #include "gles_private.h"
 
 static texture_object_t *find_texture_object(GLuint name, texture_object_t **prev)
@@ -49,7 +49,7 @@ GL_API void GL_APIENTRY glClientActiveTexture(GLenum texture)
 GL_API void GL_APIENTRY glGenTextures(GLsizei n, GLuint *textures)
 {
     if (textures == NULL) {
-        gliSetError(GL_INVALID_OPERATION);
+        gliSetError(GL_INVALID_VALUE);
         return;
     }
     if (n < 0) {
@@ -126,12 +126,13 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
 GL_API void GL_APIENTRY glDeleteTextures(GLsizei n, const GLuint *textures)
 {
     gli_context_t *context = gliGetContext();
-    if (n < 0) {
+    if (!textures) {
         gliSetError(GL_INVALID_VALUE);
         return;
     }
-    if (!textures) {
-        gliSetError(GL_INVALID_OPERATION);
+
+    if (n < 0) {
+        gliSetError(GL_INVALID_VALUE);
         return;
     }
 
@@ -476,11 +477,6 @@ GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *p
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
-    if (!params) {
-        gliSetError(GL_INVALID_VALUE);
-        return;
-    }
-
     switch (pname) {
         case GL_TEXTURE_ENV_COLOR:
             for (GLint i = 0; i < 4; i++) {
@@ -585,8 +581,14 @@ GL_API void GL_APIENTRY glGetTexParameteriv(GLenum target, GLenum pname, GLint *
 
 GL_API void GL_APIENTRY glGetTexParameterfv(GLenum target, GLenum pname, GLfloat *params)
 {
-    // GLES 1.1 has no float parameters, so just call the iv version and cast.
-    glGetTexParameteriv(target, pname, (GLint *)params);
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLint ival;
+    glGetTexParameteriv(target, pname, &ival);
+    params[0] = (GLfloat)ival;
 }
 
 GL_API void GL_APIENTRY glGetTexParameterxv(GLenum target, GLenum pname, GLfixed *params)
@@ -674,6 +676,11 @@ GL_API void GL_APIENTRY glGetTexEnviv(GLenum target, GLenum pname, GLint *params
 GL_API void GL_APIENTRY glGetTexEnvfv(GLenum target, GLenum pname, GLfloat *params)
 {
     gli_context_t *context = gliGetContext();
+    if (!params) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
     if (target != GL_TEXTURE_ENV && target != GL_POINT_SPRITE_OES) {
         gliSetError(GL_INVALID_ENUM);
         return;
@@ -773,6 +780,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                                      GLenum type,
                                      const void *pixels)
 {
+    // FIXME mipmap levels
     gli_context_t *context = gliGetContext();
 
     if (target != GL_TEXTURE_2D) {
@@ -847,37 +855,37 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
 
     xgu_texture->data_physical_address = (GLubyte *)MmGetPhysicalAddress(xgu_texture->data);
 
-    if (pixels == NULL) {
-        return;
-    }
+    if (pixels != NULL) {
 
-    const GLint alignment = context->pixel_store.unpack_alignment;
-    const size_t src_pitch = (((size_t)width * (size_t)bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
+        const GLint alignment = context->pixel_store.unpack_alignment;
+        const size_t src_pitch =
+            (((size_t)width * (size_t)bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
 
-    if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
-        GLubyte *src_pixels = (GLubyte *)pixels;
-        GLubyte *dst_pixels = GLI_MALLOC(src_pitch * height);
-        if (dst_pixels == NULL) {
-            MmFreeContiguousMemory(xgu_texture->data);
-            GLI_FREE(xgu_texture);
-            gliSetError(GL_OUT_OF_MEMORY);
-            return;
+        if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
+            GLubyte *src_pixels = (GLubyte *)pixels;
+            GLubyte *dst_pixels = GLI_MALLOC(src_pitch * height);
+            if (dst_pixels == NULL) {
+                MmFreeContiguousMemory(xgu_texture->data);
+                GLI_FREE(xgu_texture);
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
+            rgb_to_rgba_opaque(src_pixels, dst_pixels, width * height);
+            swizzle_rect(dst_pixels,
+                         xgu_texture->tex_width,
+                         xgu_texture->tex_height,
+                         xgu_texture->data,
+                         src_pitch,
+                         xgu_texture->bytes_per_pixel);
+            GLI_FREE(dst_pixels);
+        } else {
+            swizzle_rect(pixels,
+                         xgu_texture->tex_width,
+                         xgu_texture->tex_height,
+                         xgu_texture->data,
+                         src_pitch,
+                         xgu_texture->bytes_per_pixel);
         }
-        rgb_to_rgba_opaque(src_pixels, dst_pixels, width * height);
-        swizzle_rect(dst_pixels,
-                     xgu_texture->tex_width,
-                     xgu_texture->tex_height,
-                     xgu_texture->data,
-                     src_pitch,
-                     xgu_texture->bytes_per_pixel);
-        GLI_FREE(dst_pixels);
-    } else {
-        swizzle_rect(pixels,
-                     xgu_texture->tex_width,
-                     xgu_texture->tex_height,
-                     xgu_texture->data,
-                     src_pitch,
-                     xgu_texture->bytes_per_pixel);
     }
 
     // Bind the texture to the currently bound texture object
@@ -989,11 +997,14 @@ void gliTextureFlush(void)
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
 
-        if (!texture_unit->texture_2d_enabled) {
+        if (!texture_object->texture_object_dirty) {
             continue;
         }
 
-        if (!texture_object->texture_object_dirty) {
+        if (!texture_unit->texture_2d_enabled) {
+            uint32_t *pb = pb_begin();
+            pb = xgu_set_texture_control0(pb, i, 0, 0, 0);
+            pb_end(pb);
             continue;
         }
 

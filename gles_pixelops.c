@@ -77,7 +77,7 @@ GL_API void GL_APIENTRY glStencilFunc(GLenum func, GLint ref, GLuint mask)
 
     // Clamp it to 8 bits for xbox
     ref = GLI_CLAMP(ref, 0, 255);
-    mask = GLI_CLAMP(mask, 0, 255);
+    mask &= 0xFF;
 
     context->pixel_ops_state.stencil_func = func;
     context->pixel_ops_state.stencil_ref = ref;

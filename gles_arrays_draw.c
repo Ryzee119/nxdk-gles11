@@ -6,7 +6,6 @@ static void glEnableDisableClientState(GLenum array, GLboolean enable)
     gli_context_t *context = gliGetContext();
     vertex_array_data_t *vad = &context->vertex_array_data;
 
-    uint32_t *pb = pb_begin();
     switch (array) {
         case GL_VERTEX_ARRAY:
             vad->vertex_array_enabled = enable;
@@ -22,7 +21,7 @@ static void glEnableDisableClientState(GLenum array, GLboolean enable)
             break;
         case GL_TEXTURE_COORD_ARRAY:
             const GLenum texture = vad->client_active_texture - GL_TEXTURE0;
-            vad->texcoord_array_enabled[texture] = GL_TRUE;
+            vad->texcoord_array_enabled[texture] = enable;
             vad->texcoord_array_dirty[texture] = GL_TRUE;
             break;
         case GL_POINT_SIZE_ARRAY_OES:
@@ -33,7 +32,6 @@ static void glEnableDisableClientState(GLenum array, GLboolean enable)
             gliSetError(GL_INVALID_ENUM);
             break;
     }
-    pb_end(pb);
 }
 
 GL_API void GL_APIENTRY glEnableClientState(GLenum array)
@@ -271,8 +269,11 @@ GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, 
             return;
     }
 
-    // GL_UNSIGNED_INT is a GLES 1.1 extension technically
-    if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_SHORT && type != GL_UNSIGNED_INT) {
+    if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_SHORT
+#ifdef GL_OES_element_index_uint
+        && type != GL_UNSIGNED_INT
+#endif
+    ) {
         gliSetError(GL_INVALID_ENUM);
         return;
     }
@@ -336,14 +337,13 @@ GL_API void GL_APIENTRY glMultiTexCoord4f(GLenum tex, GLfloat s, GLfloat t, GLfl
     const GLenum unit = tex - GL_TEXTURE0;
     glm_vec4_copy((vec4){s, t, r, q}, context->current_values.current_texcoord[unit]);
 
-    const GLenum texture = vad->client_active_texture - GL_TEXTURE0;
     uint32_t *pb = pb_begin();
     pb = xgu_set_vertex_data4f(pb,
-                               XGU_TEXCOORD0_ARRAY + texture,
-                               cv->current_texcoord[texture][0],
-                               cv->current_texcoord[texture][1],
-                               cv->current_texcoord[texture][2],
-                               cv->current_texcoord[texture][3]);
+                               XGU_TEXCOORD0_ARRAY + unit,
+                               cv->current_texcoord[unit][0],
+                               cv->current_texcoord[unit][1],
+                               cv->current_texcoord[unit][2],
+                               cv->current_texcoord[unit][3]);
     pb_end(pb);
 }
 
@@ -450,13 +450,13 @@ void gliArrayFlush(void)
 
     // Color
     if (vad->color_array_dirty) {
-        XguVertexArrayType format = _gl_enum_to_xgu_type(vad->color_array_type);
-        unsigned int stride = vad->color_array_stride;
-        if (stride == 0) {
-            stride = vad->color_array_size * _gl_enum_to_byte_size(vad->color_array_type);
-        }
-
         if (vad->color_array_enabled) {
+            XguVertexArrayType format = _gl_enum_to_xgu_type(vad->color_array_type);
+            unsigned int stride = vad->color_array_stride;
+            if (stride == 0) {
+                stride = vad->color_array_size * _gl_enum_to_byte_size(vad->color_array_type);
+            }
+
             // If a buffer is bound, get the actual data pointer from the buffer object then use the ptr as a offset
             if (vad->color_array_buffer_binding != 0) {
                 buffer_object_t *buffer = gliGetBufferObject(vad->color_array_buffer_binding);
@@ -474,13 +474,13 @@ void gliArrayFlush(void)
 
     // Normal
     if (vad->normal_array_dirty) {
-        XguVertexArrayType format = _gl_enum_to_xgu_type(vad->normal_array_type);
-        unsigned int stride = vad->normal_array_stride;
-        if (stride == 0) {
-            stride = 3 * _gl_enum_to_byte_size(vad->normal_array_type);
-        }
-
         if (vad->normal_array_enabled) {
+            XguVertexArrayType format = _gl_enum_to_xgu_type(vad->normal_array_type);
+            unsigned int stride = vad->normal_array_stride;
+            if (stride == 0) {
+                stride = 3 * _gl_enum_to_byte_size(vad->normal_array_type);
+            }
+
             // If a buffer is bound, get the actual data pointer from the buffer object then use the ptr as a offset
             if (vad->normal_array_buffer_binding != 0) {
                 buffer_object_t *buffer = gliGetBufferObject(vad->normal_array_buffer_binding);
@@ -530,14 +530,21 @@ void gliArrayFlush(void)
 
     // Point Size
     if (vad->point_size_array_dirty) {
-        XguVertexArrayType format = _gl_enum_to_xgu_type(vad->point_size_array_type);
-        unsigned int stride = vad->point_size_array_stride;
-        if (stride == 0) {
-            stride = 1 * _gl_enum_to_byte_size(vad->point_size_array_type);
-        }
-
         if (vad->point_size_array_enabled) {
-            xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, format, 1, stride, vad->point_size_array_ptr);
+            XguVertexArrayType format = _gl_enum_to_xgu_type(vad->point_size_array_type);
+            unsigned int stride = vad->point_size_array_stride;
+            if (stride == 0) {
+                stride = 1 * _gl_enum_to_byte_size(vad->point_size_array_type);
+            }
+
+            if (vad->point_size_array_buffer_binding != 0) {
+                buffer_object_t *buffer = gliGetBufferObject(vad->point_size_array_buffer_binding);
+                assert(buffer != NULL);
+                array_ptr = (void *)((uintptr_t)buffer->buffer_data + (uintptr_t)vad->point_size_array_ptr);
+            } else {
+                array_ptr = vad->point_size_array_ptr;
+            }
+            xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, format, 1, stride, array_ptr);
         } else {
             xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, XGU_FLOAT, 0, 0, 0);
         }

@@ -231,6 +231,9 @@ GL_API void GL_APIENTRY glDepthRangef(GLfloat n, GLfloat f)
 {
     gli_context_t *c = gliGetContext();
 
+    n = glm_clamp(n, 0.0f, 1.0f);
+    f = glm_clamp(f, 0.0f, 1.0f);
+
     c->transformation_state.depth_range[0] = n;
     c->transformation_state.depth_range[1] = f;
     c->transformation_state.depth_range_dirty = GL_TRUE;

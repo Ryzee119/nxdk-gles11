@@ -68,6 +68,12 @@ typedef struct xgu_texture
      (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) |  \
      (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 0))
 
+#define FLOAT4_TO_PACKED_ABGR32(f) \
+    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | \
+     (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 16) | \
+     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) |  \
+     (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 0))
+
 static inline uint32_t npot2pot(uint32_t num)
 {
     uint32_t msb;

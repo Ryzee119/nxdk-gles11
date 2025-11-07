@@ -18,7 +18,7 @@ GL_API void GL_APIENTRY glGetBooleanv(GLenum pname, GLboolean *data)
         gliSetError(GL_INVALID_ENUM);
         return;
     }
-    
+
     if (data == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -57,7 +57,7 @@ GL_API void GL_APIENTRY glGetIntegerv(GLenum pname, GLint *data)
         gliSetError(GL_INVALID_ENUM);
         return;
     }
-    
+
     if (data == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -127,7 +127,7 @@ GL_API void GL_APIENTRY glGetFloatv(GLenum pname, GLfloat *data)
         gliSetError(GL_INVALID_OPERATION);
         return;
     }
-    
+
     assert(src != NULL);
 
     // If we match type, its a simple copy
@@ -160,14 +160,14 @@ GL_API void GL_APIENTRY glGetFixedv(GLenum pname, GLfixed *data)
 {
     enum gli_get_type element_type;
     GLint element_count;
-    
+
     const void *src = gliGetElementPtr(pname, &element_type, &element_count);
 
     if (element_type == -1 || element_count == -1) {
         gliSetError(GL_INVALID_ENUM);
         return;
     }
-    
+
     if (data == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -203,8 +203,8 @@ GL_API void GL_APIENTRY glGetPointerv(GLenum pname, void **params)
             *params = (void *)context->vertex_array_data.point_size_array_ptr;
             return;
         case GL_TEXTURE_COORD_ARRAY_POINTER:
-            *params = (void *)context->vertex_array_data.texcoord_array_ptr
-                [context->vertex_array_data.client_active_texture - GL_TEXTURE0];
+            *params = (void *)context->vertex_array_data
+                          .texcoord_array_ptr[context->vertex_array_data.client_active_texture - GL_TEXTURE0];
             return;
         case GL_VERTEX_ARRAY_POINTER:
             *params = (void *)context->vertex_array_data.vertex_array_ptr;
@@ -244,6 +244,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             //// FIXME. 8 for RGBA8888 etc
+            assert(0);
             return NULL;
         case GL_ALPHA_TEST:
             // params returns a single boolean value indicating whether alpha testing of fragments is enabled. The
@@ -293,6 +294,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             //// FIXME. 8 for RGBA8888 etc
+            assert(0);
             return NULL;
         case GL_CLIENT_ACTIVE_TEXTURE:
             // params returns a single value indicating the current client active multitexture unit. The initial value
@@ -300,7 +302,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->vertex_array_data.client_active_texture;
-        case GL_CLIP_PLANE0 ... (GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES - 1):
+        case GL_CLIP_PLANE0 ...(GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES - 1):
             // params returns a single boolean value indicating whether the ith user clipping plane is enabled. The
             // initial value is GL_FALSE. See glClipPlane.
             *element_type = GLI_BOOLEAN;
@@ -395,13 +397,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             // params returns four values: the s, t, r, and q current texture coordinates. The initial value is (0, 0,
             // 0, 1). See glMultiTexCoord.
             *element_type = GLI_FLOAT;
-            *element_count = 4; 
+            *element_count = 4;
             return (GLfloat *)context->current_values.current_texcoord[tu];
         case GL_DEPTH_BITS:
             // params returns one value, the number of bitplanes in the depth buffer.
             // FIXME. 24 for D24S8 etc
             *element_type = GLI_INT;
             *element_count = 1;
+            assert(0);
             return NULL;
             break;
         case GL_DEPTH_CLEAR_VALUE:
@@ -485,18 +488,21 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             //// FIXME. 8 for RGBA8888 etc
+            assert(0);
             return NULL;
         case GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES:
             // params returns one value, the preferred format for pixel read back. See glReadPixels.
             *element_type = GLI_INT;
             *element_count = 1;
             // FIXME. Probably use GL_RGBA but add a ifdef
+            assert(0);
             return NULL;
         case GL_IMPLEMENTATION_COLOR_READ_TYPE_OES:
             // params returns one value, the preferred type for pixel read back. See glReadPixels.
             *element_type = GLI_INT;
             *element_count = 1;
             // FIXME. GL_UNSIGNED_BYTE
+            assert(0);
             return NULL;
         case GL_LIGHT_MODEL_AMBIENT:
             // params returns four values: the red, green, blue, and alpha components of the ambient intensity of the
@@ -510,7 +516,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_BOOLEAN;
             *element_count = 1;
             return &context->lighting_state.light_model_two_side;
-        case GL_LIGHT0 ... (GL_LIGHT0 + GLI_MAX_LIGHTS - 1):
+        case GL_LIGHT0 ...(GL_LIGHT0 + GLI_MAX_LIGHTS - 1):
             // params returns a single boolean value indicating whether the ith light is enabled. The initial value is
             // GL_FALSE. See glLight and glLightModel.
             *element_type = GLI_BOOLEAN;
@@ -645,7 +651,8 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_count = 1;
             return &context->transformation_state.normalize_enabled;
         case GL_NUM_COMPRESSED_TEXTURE_FORMATS:
-            // params returns one value, the number of supported compressed texture formats. See glCompressedTexImage2D and glCompressedTexSubImage2D.
+            // params returns one value, the number of supported compressed texture formats. See glCompressedTexImage2D
+            // and glCompressedTexSubImage2D.
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->implementation_limits.num_compressed_texture_formats;
@@ -763,6 +770,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             //// FIXME. 8 for RGBA8888 etc
+            assert(0);
             return NULL;
         case GL_RESCALE_NORMAL:
             // params returns a single boolean value indicating whether rescaling of normals is enabled. The initial
@@ -787,11 +795,12 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
         case GL_SAMPLE_BUFFERS:
             // params returns a single integer value indicating the number of sample buffers associated with the
             // currently bound framebuffer. See glSampleCoverage.
-            *element_type = GLI_INT;
-            *element_count = 1;
-            return NULL; // FIXME
             // 0 — no multisample buffer (no MSAA).
             // 1 — one multisample buffer (the common case when MSAA is enabled).
+            *element_type = GLI_INT;
+            *element_count = 1;
+            assert(0);
+            return NULL; // FIXME
         case GL_SAMPLE_COVERAGE:
             // params returns a single boolean value indicating if the fragment coverage value should be ANDed with a
             // temporary coverage value based on the current sample coverage value. The initial value is GL_FALSE. See
@@ -816,6 +825,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             // framebuffer. See glSampleCoverage.
             *element_type = GLI_INT;
             *element_count = 1;
+            assert(0);
             return NULL; // FIXME what is this value?
             break;
         case GL_SCISSOR_BOX:
