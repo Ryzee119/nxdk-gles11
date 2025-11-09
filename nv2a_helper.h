@@ -39,7 +39,7 @@ XguShadeModel _gl_enum_to_xgu_shade_model(GLenum code);
 XguFogMode _gl_enum_to_xgu_fog_mode(GLenum mode);
 XguTextureAddress _gl_wrap_to_xgu_address_mode(GLenum wrap);
 XguTexFilter _gl_filter_to_xgu_tex_filter(GLenum filter);
-XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint *bytes_per_pixel);
+XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint *bytes_per_pixel, GLboolean swizzled);
 
 typedef struct xgu_texture
 {

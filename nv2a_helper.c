@@ -237,38 +237,38 @@ XguTexFilter _gl_filter_to_xgu_tex_filter(GLenum filter)
     }
 }
 
-XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint *bytes_per_pixel)
+XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint *bytes_per_pixel, GLboolean swizzled)
 {
     if (type == GL_UNSIGNED_BYTE) {
         switch (format) {
             case GL_ALPHA:
                 *bytes_per_pixel = 1;
-                return XGU_TEXTURE_FORMAT_A8_SWIZZLED;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_A8_SWIZZLED : XGU_TEXTURE_FORMAT_A8;
             case GL_LUMINANCE:
                 *bytes_per_pixel = 1;
-                return XGU_TEXTURE_FORMAT_Y8_SWIZZLED;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_Y8_SWIZZLED : XGU_TEXTURE_FORMAT_Y8;
             case GL_LUMINANCE_ALPHA:
                 *bytes_per_pixel = 2;
-                return XGU_TEXTURE_FORMAT_AY8_SWIZZLED;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_AY8_SWIZZLED : XGU_TEXTURE_FORMAT_AY8;
             case GL_RGB:
             case GL_RGBA:
                 *bytes_per_pixel = 4;
-                return XGU_TEXTURE_FORMAT_A8B8G8R8_SWIZZLED;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_A8B8G8R8_SWIZZLED : XGU_TEXTURE_FORMAT_A8B8G8R8;
             default:
                 break;
         }
     } else if (type == GL_UNSIGNED_SHORT_5_6_5) {
         *bytes_per_pixel = 2;
-        return XGU_TEXTURE_FORMAT_R5G6B5_SWIZZLED;
+        return (swizzled) ? XGU_TEXTURE_FORMAT_R5G6B5_SWIZZLED : XGU_TEXTURE_FORMAT_R5G6B5;
     } else if (type == GL_UNSIGNED_SHORT_4_4_4_4) {
         *bytes_per_pixel = 2;
-        return XGU_TEXTURE_FORMAT_A4R4G4B4_SWIZZLED;
+        return (swizzled) ? XGU_TEXTURE_FORMAT_A4R4G4B4_SWIZZLED : XGU_TEXTURE_FORMAT_A4R4G4B4;
     } else if (type == GL_UNSIGNED_SHORT_5_5_5_1) {
         *bytes_per_pixel = 2;
-        return XGU_TEXTURE_FORMAT_A1R5G5B5_SWIZZLED;
+        return (swizzled) ? XGU_TEXTURE_FORMAT_A1R5G5B5_SWIZZLED : XGU_TEXTURE_FORMAT_A1R5G5B5;
     }
 
-    return (XguTexFormatColor)0;
+    return (XguTexFormatColor)-1;
 }
 
 #define REG_ZERO      0x0
@@ -481,7 +481,7 @@ void combiner_set_texture_env(void)
         DWORD ALPHA_IN = 0;
         DWORD ALPHA_OUT = 0;
 
-        if (!texture_unit->texture_2d_enabled) {
+        if (!texture_unit->texture_2d_enabled || texture_unit->bound_texture_object == &texture_unit->unbound_texture_object) {
             // Pass through
             // Color: out.rgb = STAGE_INPUT * 1
             // Alpha: out.a = STAGE_INPUT.a * 1

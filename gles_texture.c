@@ -721,38 +721,6 @@ GL_API void GL_APIENTRY glGetTexEnvxv(GLenum target, GLenum pname, GLfixed *para
     *params = gliFloattoFixed(paramf);
 }
 
-void convert_rgb_expand_swizzle(const uint8_t *src,
-                                uint8_t *dst,
-                                int width,
-                                int height,
-                                int src_pitch,
-                                int dst_pitch,
-                                int r_dst,
-                                int g_dst,
-                                int b_dst,
-                                int a_dst,
-                                uint8_t a_value)
-{
-    for (int y = 0; y < height; y++) {
-        const uint8_t *s = src + y * src_pitch;
-        uint8_t *d = dst + y * dst_pitch;
-
-        for (int x = 0; x < width; x++) {
-            uint8_t r = s[0];
-            uint8_t g = s[1];
-            uint8_t b = s[2];
-
-            d[r_dst] = r;
-            d[g_dst] = g;
-            d[b_dst] = b;
-            d[a_dst] = a_value;
-
-            s += 3;
-            d += 4;
-        }
-    }
-}
-
 static inline void rgb_to_rgba_opaque(const uint8_t *restrict src, uint8_t *restrict dst, size_t pixel_count)
 {
     for (size_t i = 0; i < pixel_count; ++i) {
@@ -831,19 +799,35 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         return;
     }
 
+    xgu_texture->swizzled = 0;
+
+    // If the provided width and height are already powers of two, we swizzle the texture to get better performance
+    if (xgu_texture->data_width == npot2pot(width) && xgu_texture->data_height == npot2pot(height)) {
+        xgu_texture->swizzled = 1;
+    }
+
     GLuint bytes_per_pixel = 0;
-    XguTexFormatColor xgu_format = _gl_enum_to_xgu_tex_format(format, type, &bytes_per_pixel);
-    assert(xgu_format != 0);
+    XguTexFormatColor xgu_format = _gl_enum_to_xgu_tex_format(format, type, &bytes_per_pixel, xgu_texture->swizzled);
+    assert(xgu_format != -1);
     assert(bytes_per_pixel != 0);
 
-    xgu_texture->data_width = npot2pot(width);
-    xgu_texture->data_height = npot2pot(height);
-    xgu_texture->tex_width = width;
-    xgu_texture->tex_height = height;
+    // Swizzled must be a power of 2
+    xgu_texture->data_width = (xgu_texture->swizzled) ? npot2pot(width) : width;
+    xgu_texture->data_height = (xgu_texture->swizzled) ? npot2pot(height) : height;
+    xgu_texture->tex_width = width - 1;
+    xgu_texture->tex_height = height - 1;
     xgu_texture->bytes_per_pixel = bytes_per_pixel;
     xgu_texture->pitch = xgu_texture->data_width * bytes_per_pixel;
-    xgu_texture->u_scale = (float)xgu_texture->tex_width / (float)xgu_texture->data_width;
-    xgu_texture->v_scale = (float)xgu_texture->tex_height / (float)xgu_texture->data_height;
+
+    // Swizzled texture coordinates are normalized to [0, 1]
+    if (xgu_texture->swizzled) {
+        xgu_texture->u_scale = (float)xgu_texture->tex_width / (float)xgu_texture->data_width;
+        xgu_texture->v_scale = (float)xgu_texture->tex_height / (float)xgu_texture->data_height;
+    } else {
+        xgu_texture->u_scale = (float)xgu_texture->tex_width;
+        xgu_texture->v_scale = (float)xgu_texture->tex_height;
+    }
+
     xgu_texture->format = xgu_format;
     xgu_texture->data = MmAllocateContiguousMemoryEx(
         xgu_texture->pitch * xgu_texture->data_height, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
@@ -853,10 +837,11 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         return;
     }
 
+    memset(xgu_texture->data, 0, xgu_texture->pitch * xgu_texture->data_height);
+
     xgu_texture->data_physical_address = (GLubyte *)MmGetPhysicalAddress(xgu_texture->data);
 
     if (pixels != NULL) {
-
         const GLint alignment = context->pixel_store.unpack_alignment;
         const size_t src_pitch =
             (((size_t)width * (size_t)bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
@@ -871,20 +856,36 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                 return;
             }
             rgb_to_rgba_opaque(src_pixels, dst_pixels, width * height);
-            swizzle_rect(dst_pixels,
-                         xgu_texture->tex_width,
-                         xgu_texture->tex_height,
-                         xgu_texture->data,
-                         src_pitch,
-                         xgu_texture->bytes_per_pixel);
+            if (xgu_texture->swizzled) {
+                swizzle_rect(dst_pixels,
+                             xgu_texture->tex_width,
+                             xgu_texture->tex_height,
+                             xgu_texture->data,
+                             src_pitch,
+                             xgu_texture->bytes_per_pixel);
+            } else {
+                for (GLuint y = 0; y < (GLuint)height; y++) {
+                    memcpy((uint8_t *)xgu_texture->data + y * xgu_texture->pitch,
+                           (const uint8_t *)dst_pixels + y * src_pitch,
+                           width * bytes_per_pixel);
+                }
+            }
             GLI_FREE(dst_pixels);
         } else {
-            swizzle_rect(pixels,
-                         xgu_texture->tex_width,
-                         xgu_texture->tex_height,
-                         xgu_texture->data,
-                         src_pitch,
-                         xgu_texture->bytes_per_pixel);
+            if (xgu_texture->swizzled) {
+                swizzle_rect(pixels,
+                             xgu_texture->tex_width,
+                             xgu_texture->tex_height,
+                             xgu_texture->data,
+                             src_pitch,
+                             xgu_texture->bytes_per_pixel);
+            } else {
+                for (GLuint y = 0; y < (GLuint)height; y++) {
+                    memcpy((uint8_t *)xgu_texture->data + y * xgu_texture->pitch,
+                           (const uint8_t *)pixels + y * src_pitch,
+                           width * bytes_per_pixel);
+                }
+            }
         }
     }
 
@@ -996,20 +997,19 @@ void gliTextureFlush(void)
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
+        xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
         if (!texture_object->texture_object_dirty) {
             continue;
         }
 
-        if (!texture_unit->texture_2d_enabled) {
+        if (!texture_unit->texture_2d_enabled || !xgu_texture) {
             uint32_t *pb = pb_begin();
+            pb = xgu_set_texture_matrix_enable(pb, i, false);
             pb = xgu_set_texture_control0(pb, i, 0, 0, 0);
             pb_end(pb);
             continue;
         }
-
-        xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
-        assert(xgu_texture != NULL);
 
         XguTextureAddress u = _gl_wrap_to_xgu_address_mode(texture_object->wrap_s);
         XguTextureAddress v = _gl_wrap_to_xgu_address_mode(texture_object->wrap_t);
@@ -1017,6 +1017,17 @@ void gliTextureFlush(void)
         XguTexFilter mag_filter = _gl_filter_to_xgu_tex_filter(texture_object->mag_filter);
 
         uint32_t *pb = pb_begin();
+
+        mat4 texture_matrix = {
+            {xgu_texture->u_scale, 0.0f,                 0.0f, 0.0f},
+            {0.0f,                 xgu_texture->v_scale, 0.0f, 0.0f},
+            {0.0f,                 0.0f,                 1.0f, 0.0f},
+            {0.0f,                 0.0f,                 0.0f, 1.0f}
+        };
+
+        pb = xgu_set_texture_matrix_enable(pb, i, true);
+        pb = xgu_set_texture_matrix(pb, i, (const float *)texture_matrix);
+
         pb = xgu_set_texture_offset(pb, i, xgu_texture->data_physical_address);
         pb = xgu_set_texture_format(pb,
                                     i,
