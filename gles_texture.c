@@ -450,7 +450,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
             break;
 
         case GL_COORD_REPLACE_OES:
-            texture_unit->coord_replace_oes = (params[0]) ? GL_TRUE : GL_FALSE;
+            texture_unit->coord_replace_oes_enabled = (params[0]) ? GL_TRUE : GL_FALSE;
             break;
 
         default:
@@ -665,7 +665,7 @@ GL_API void GL_APIENTRY glGetTexEnviv(GLenum target, GLenum pname, GLint *params
             params[0] = (GLint)(texture_unit->alpha_scale);
             break;
         case GL_COORD_REPLACE_OES:
-            params[0] = texture_unit->coord_replace_oes ? 1 : 0;
+            params[0] = texture_unit->coord_replace_oes_enabled ? 1 : 0;
             break;
         default:
             gliSetError(GL_INVALID_ENUM);
@@ -802,7 +802,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     xgu_texture->swizzled = 0;
 
     // If the provided width and height are already powers of two, we swizzle the texture to get better performance
-    if (xgu_texture->data_width == npot2pot(width) && xgu_texture->data_height == npot2pot(height)) {
+    if (width == npot2pot(width) && height == npot2pot(height)) {
         xgu_texture->swizzled = 1;
     }
 
@@ -814,10 +814,11 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     // Swizzled must be a power of 2
     xgu_texture->data_width = (xgu_texture->swizzled) ? npot2pot(width) : width;
     xgu_texture->data_height = (xgu_texture->swizzled) ? npot2pot(height) : height;
-    xgu_texture->tex_width = width - 1;
-    xgu_texture->tex_height = height - 1;
+    xgu_texture->tex_width = width;
+    xgu_texture->tex_height = height;
     xgu_texture->bytes_per_pixel = bytes_per_pixel;
     xgu_texture->pitch = xgu_texture->data_width * bytes_per_pixel;
+    xgu_texture->texture_stage = -1;
 
     // Swizzled texture coordinates are normalized to [0, 1]
     if (xgu_texture->swizzled) {
@@ -989,27 +990,72 @@ glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x,
     (void)h;
 }
 
+static GLbyte allocate_to_combiner_stage(texture_unit_t *texture_unit, texture_unit_t *stages[4])
+{
+    gli_context_t *context = gliGetContext();
+    GLboolean is_point_sprite =
+        texture_unit->coord_replace_oes_enabled && context->rasterization_state.point_sprites_enabled;
+
+    texture_unit_t *stage = NULL;
+    if (is_point_sprite) {
+        // Point sprites only work on stage 3
+        if (stages[3] != NULL) {
+            return -1;
+        }
+        stages[3] = texture_unit;
+        return 3;
+    } else {
+        for (GLbyte i = 0; i < 4; i++) {
+            if (stages[i] == NULL) {
+                stages[i] = texture_unit;
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
 void gliTextureFlush(void)
 {
     gli_context_t *context = gliGetContext();
+    texture_unit_t *stages[4] = {NULL, NULL, NULL, NULL};
 
-    // Update texture bindings
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
         xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
+        // Allocate the texture to a combiner stage
+        GLbyte stage = -1;
+        if (xgu_texture) {
+            if (texture_unit->texture_2d_enabled) {
+                stage = allocate_to_combiner_stage(texture_unit, stages);
+                if (stage == -1) {
+                    continue;
+                }
+
+                // If the stage in the combiner has changed, mark everything dirty to ensure update
+                if (xgu_texture->texture_stage != stage) {
+                    xgu_texture->texture_stage = stage;
+                    texture_unit->texture_unit_dirty = GL_TRUE;
+                    texture_object->texture_object_dirty = GL_TRUE;
+                }
+            } else {
+                xgu_texture->texture_stage = -1;
+            }
+        }
+
+        // No texture or disabled texture. Don't need to do anything
+        if (stage == -1) {
+            continue;
+        }
+
+        // None of the object parameters have changed so we are done
         if (!texture_object->texture_object_dirty) {
             continue;
         }
 
-        if (!texture_unit->texture_2d_enabled || !xgu_texture) {
-            uint32_t *pb = pb_begin();
-            pb = xgu_set_texture_matrix_enable(pb, i, false);
-            pb = xgu_set_texture_control0(pb, i, 0, 0, 0);
-            pb_end(pb);
-            continue;
-        }
+        texture_object->texture_object_dirty = GL_FALSE;
 
         XguTextureAddress u = _gl_wrap_to_xgu_address_mode(texture_object->wrap_s);
         XguTextureAddress v = _gl_wrap_to_xgu_address_mode(texture_object->wrap_t);
@@ -1025,12 +1071,12 @@ void gliTextureFlush(void)
             {0.0f,                 0.0f,                 0.0f, 1.0f}
         };
 
-        pb = xgu_set_texture_matrix_enable(pb, i, true);
-        pb = xgu_set_texture_matrix(pb, i, (const float *)texture_matrix);
+        pb = xgu_set_texture_matrix_enable(pb, stage, true);
+        pb = xgu_set_texture_matrix(pb, stage, (const float *)texture_matrix);
 
-        pb = xgu_set_texture_offset(pb, i, xgu_texture->data_physical_address);
+        pb = xgu_set_texture_offset(pb, stage, xgu_texture->data_physical_address);
         pb = xgu_set_texture_format(pb,
-                                    i,
+                                    stage,
                                     2,
                                     false,
                                     XGU_SOURCE_COLOR,
@@ -1040,14 +1086,15 @@ void gliTextureFlush(void)
                                     __builtin_ctz(xgu_texture->data_width),
                                     __builtin_ctz(xgu_texture->data_height),
                                     0);
-        pb = xgu_set_texture_control0(pb, i, true, 0, 0);
-        pb = xgu_set_texture_control1(pb, i, xgu_texture->pitch);
-        pb = xgu_set_texture_image_rect(pb, i, xgu_texture->tex_width, xgu_texture->tex_height);
+        pb = xgu_set_texture_control0(pb, stage, true, 0, 0);
+        pb = xgu_set_texture_control1(pb, stage, xgu_texture->pitch);
+        pb = xgu_set_texture_image_rect(pb, stage, xgu_texture->tex_width, xgu_texture->tex_height);
         pb = xgu_set_texture_filter(
-            pb, i, 0, XGU_TEXTURE_CONVOLUTION_GAUSSIAN, min_filter, mag_filter, false, false, false, false);
-        pb = xgu_set_texture_address(pb, i, u, (u == XGU_WRAP), v, (v == XGU_WRAP), XGU_CLAMP_TO_EDGE, false, false);
+            pb, stage, 0, XGU_TEXTURE_CONVOLUTION_GAUSSIAN, min_filter, mag_filter, false, false, false, false);
+        pb =
+            xgu_set_texture_address(pb, stage, u, (u == XGU_WRAP), v, (v == XGU_WRAP), XGU_CLAMP_TO_EDGE, false, false);
         pb_end(pb);
     }
 
-    combiner_set_texture_env();
+    combiner_set_texture_env(stages);
 }

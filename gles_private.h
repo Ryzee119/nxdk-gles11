@@ -289,6 +289,7 @@ typedef struct
 // Table 6.11 - Rasterization State
 typedef struct
 {
+    GLboolean point_params_dirty;
     GLfloat point_size;
     GLboolean point_smooth_enabled;
     GLfloat point_size_min;
@@ -335,7 +336,7 @@ typedef struct texture_object
     struct texture_object *next;
 } texture_object_t;
 
-typedef struct
+typedef struct texture_unit
 {
     GLboolean texture_unit_dirty;
     GLboolean texture_2d_enabled;
@@ -345,7 +346,7 @@ typedef struct
 
     GLenum tex_env_mode;
     vec4 tex_env_color;
-    GLboolean coord_replace_oes;
+    GLboolean coord_replace_oes_enabled;
 
     GLenum combine_rgb_function;
     GLenum combine_alpha_function;
@@ -472,6 +473,7 @@ void gliLightingFlush(void);
 void gliTransformFlush(void);
 void gliTextureFlush(void);
 void gliFogFlush(void);
+void gliPointParamsFlush(void);
 buffer_object_t *gliGetBufferObject(GLuint name);
 gli_context_t *gliGetContext(void);
 

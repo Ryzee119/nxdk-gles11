@@ -27,6 +27,7 @@ void gliFlushStateChange(void)
     gliTextureFlush();
     gliFogFlush();
     gliLightingFlush();
+    gliPointParamsFlush();
     gliArrayFlush();
 }
 
@@ -229,6 +230,10 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
         case GL_POINT_SPRITE_OES:
             // If enabled, point sprites are enabled. See glPointSize and glTexEnv
             context->rasterization_state.point_sprites_enabled = enable;
+            pb = push_command_boolean(
+                pb, NV097_SET_POINT_SMOOTH_ENABLE, enable); // FIXME, seems to need to be enabled for point sprite? When
+                                                            // disabled should restore to what it was?
+            pb = push_command_boolean(pb, NV097_SET_POINT_PARAMS_ENABLE, enable);
             // FIXME
             break;
         case GL_POLYGON_OFFSET_FILL:
@@ -774,15 +779,21 @@ void glContextInit(GLint window_width, GLint window_height)
     /* Points */
     context->rasterization_state.point_size = 1.0f;
     context->rasterization_state.point_smooth_enabled = GL_FALSE;
-    context->rasterization_state.point_size_min = 1.0f;
-    context->rasterization_state.point_size_max = GLI_MAX_ALIASED_POINT_SIZE;
+    context->rasterization_state.point_size_min = 0.0f;
+    context->rasterization_state.point_size_max = 1.0f;
     context->rasterization_state.point_fade_threshold_size = 1.0f;
     context->rasterization_state.point_distance_attenuation[0] = 1.0f;
     context->rasterization_state.point_distance_attenuation[1] = 0.0f;
     context->rasterization_state.point_distance_attenuation[2] = 0.0f;
     context->rasterization_state.point_sprites_enabled = GL_FALSE; /* OES_point_sprite */
-    glPointSize(1.0f);
+    context->rasterization_state.point_params_dirty = GL_TRUE;
+    glPointSize(context->rasterization_state.point_size);
     glDisable(GL_POINT_SMOOTH);
+    glPointParameterf(GL_POINT_SIZE_MIN, context->rasterization_state.point_size_min);
+    glPointParameterf(GL_POINT_SIZE_MAX, context->rasterization_state.point_size_max);
+    glPointParameterf(GL_POINT_FADE_THRESHOLD_SIZE, context->rasterization_state.point_fade_threshold_size);
+    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, context->rasterization_state.point_distance_attenuation);
+    glDisable(GL_POINT_SPRITE_OES);
 
     /* Lines */
     context->rasterization_state.line_width = 1.0f;
@@ -835,7 +846,7 @@ void glContextInit(GLint window_width, GLint window_height)
         }
         texture_unit->texture_binding_2d = 0;
         texture_unit->tex_env_mode = GL_MODULATE;
-        texture_unit->coord_replace_oes = GL_FALSE;
+        texture_unit->coord_replace_oes_enabled = GL_FALSE;
         glm_vec4_zero(texture_unit->tex_env_color);
 
         texture_unit->combine_rgb_function = GL_MODULATE;

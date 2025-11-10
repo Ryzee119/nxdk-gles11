@@ -7,7 +7,7 @@
 #include <swizzle.h>
 
 #define GLI_MAX_LIGHTS XGU_LIGHT_COUNT
-#define GLI_MAX_TEXTURE_UNITS (XGU_TEXTURE_COUNT - 1) // We reserve one texture unit for user clip planes
+#define GLI_MAX_TEXTURE_UNITS XGU_TEXTURE_COUNT // This is shared with clip planes (4 per stage) and only one point sprite can be enabled
 #define GLI_MAX_CLIP_PLANES 4 // One texture unit can handle 4 planes.
 #define GLI_MAX_TEXTURE_SIZE 4096
 #define GLI_VENDOR_STRING "nxdk GLES Renderer"
@@ -23,8 +23,10 @@
 #define GLI_DEBUG_PRINT_INCLUDE <xboxkrnl/xboxkrnl.h>
 #define GLI_DEBUG_PRINT(...) DbgPrint(__VA_ARGS__)
 
+struct texture_unit;
+
 void combiner_init(void);
-void combiner_set_texture_env(void);
+void combiner_set_texture_env(struct texture_unit *stages[4]);
 uint32_t *combiner_specular_fog_config(uint32_t *p, GLboolean fog_enabled, GLboolean specular_enabled);
 
 XguVertexArrayType _gl_enum_to_xgu_type(GLenum type);
@@ -43,6 +45,7 @@ XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint 
 
 typedef struct xgu_texture
 {
+    GLint texture_stage;
     GLint data_width;
     GLint data_height;
     GLint tex_width;

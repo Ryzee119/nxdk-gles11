@@ -263,13 +263,12 @@ GL_API void GL_APIENTRY glClipPlanef(GLenum p, const GLfloat *eqn)
 
     // Current modelview matrix
     mat4 *modelview = &context->transformation_state
-                           .modelview_matrix_stack[
-                               context->transformation_state.modelview_matrix_stack_depth - 1];
+                           .modelview_matrix_stack[context->transformation_state.modelview_matrix_stack_depth - 1];
 
     // Inverse-transpose of modelview
     mat4 inv;
-    glm_mat4_inv(*modelview, inv);      // inv = M^{-1}
-    glm_mat4_transpose(inv);            // inv = (M^{-1})^T
+    glm_mat4_inv(*modelview, inv); // inv = M^{-1}
+    glm_mat4_transpose(inv);       // inv = (M^{-1})^T
 
     // Load eqn into a vec4 (A,B,C,D)
     vec4 eqn_vec;
@@ -280,8 +279,7 @@ GL_API void GL_APIENTRY glClipPlanef(GLenum p, const GLfloat *eqn)
     glm_mat4_mulv(inv, eqn_vec, transformed_eqn);
 
     // Store in context as eye-space plane
-    glm_vec4_copy(transformed_eqn,
-                  context->transformation_state.clip_plane[plane_index]);
+    glm_vec4_copy(transformed_eqn, context->transformation_state.clip_plane[plane_index]);
     context->transformation_state.clip_plane_dirty = GL_TRUE;
 }
 
