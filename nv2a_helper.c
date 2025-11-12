@@ -249,7 +249,7 @@ XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint 
                 return (swizzled) ? XGU_TEXTURE_FORMAT_Y8_SWIZZLED : XGU_TEXTURE_FORMAT_Y8;
             case GL_LUMINANCE_ALPHA:
                 *bytes_per_pixel = 2;
-                return (swizzled) ? XGU_TEXTURE_FORMAT_AY8_SWIZZLED : XGU_TEXTURE_FORMAT_AY8;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_A8Y8_SWIZZLED : XGU_TEXTURE_FORMAT_A8Y8;
             case GL_RGB:
             case GL_RGBA:
                 *bytes_per_pixel = 4;
@@ -459,31 +459,40 @@ static GLenum invert_operand(GLenum op)
 #define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE    NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_CLIP_PLANE
 #define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_2D_PROJECTIVE NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_2D_PROJECTIVE
 
-void combiner_set_texture_env(texture_unit_t *stages[4])
+void combiner_set_texture_env(GLbyte xgu_to_gl_unit[4])
 {
     gli_context_t *context = gliGetContext();
     uint32_t *pb;
 
     DWORD shader_program[4] = {
-        NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH,
-        NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH,
-        NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH,
-        NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH,
+        NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_PASS_THROUGH,
+        NV097_SET_SHADER_STAGE_PROGRAM_STAGE1_PASS_THROUGH,
+        NV097_SET_SHADER_STAGE_PROGRAM_STAGE2_PASS_THROUGH,
+        NV097_SET_SHADER_STAGE_PROGRAM_STAGE3_PASS_THROUGH, // Always enable clip plane at stage 3
     };
 
     // Update combiner stages
     pb = pb_begin();
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+        GLbyte gl_unit = xgu_to_gl_unit[i];
+        texture_unit_t *texture_unit = (gl_unit >= 0) ? &context->texture_environment.texture_units[gl_unit] : NULL;
+
+        if (gl_unit < 0 || /*!texture_unit->texture_unit_dirty || */!texture_unit->texture_2d_enabled || texture_unit->bound_texture_object == &texture_unit->unbound_texture_object) {
+            texture_unit = NULL;
+        }
+
         DWORD STAGE_INPUT = (i == 0) ? REG_COLOR0 : REG_SPARE0;
         DWORD RGB_IN = 0;
         DWORD RGB_OUT = 0;
         DWORD ALPHA_IN = 0;
         DWORD ALPHA_OUT = 0;
 
-        texture_unit_t *texture_unit = stages[i];
-        if (texture_unit == NULL) {
+        if (!texture_unit || !texture_unit->texture_2d_enabled || texture_unit->bound_texture_object == &texture_unit->unbound_texture_object) {
+            // Pass through
+            // Color: out.rgb = STAGE_INPUT * 1
+            // Alpha: out.a = STAGE_INPUT.a * 1
             RGB_IN |= PB_MASK(SRC_A, STAGE_INPUT);
-            RGB_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_INVERT;
+            RGB_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_INVERT; // Inverting zero gives 1
 
             ALPHA_IN |= PB_MASK(SRC_A, STAGE_INPUT) | SRC_A_FLAG_ALPHA;
             ALPHA_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
@@ -491,18 +500,10 @@ void combiner_set_texture_env(texture_unit_t *stages[4])
             RGB_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
             ALPHA_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
         } else {
-            assert(texture_unit->bound_texture_object->texture_2d);
-            assert(texture_unit->texture_2d_enabled);
-            assert(texture_unit->bound_texture_object != &texture_unit->unbound_texture_object);
+            texture_unit_t *texture_unit = &context->texture_environment.texture_units[gl_unit];
 
             DWORD packed_color = FLOAT4_TO_PACKED_ARGB32(texture_unit->tex_env_color);
             pb = pb_push1(pb, NV097_SET_COMBINER_FACTOR0 + (i * 4), packed_color);
-
-            shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_2D_PROJECTIVE;
-
-            if (!texture_unit->texture_unit_dirty) {
-                continue;
-            }
 
             switch (texture_unit->tex_env_mode) {
                 case GL_ADD:
@@ -748,6 +749,7 @@ void combiner_set_texture_env(texture_unit_t *stages[4])
                 default:
                     break;
             }
+            shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_2D_PROJECTIVE;
             // NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_CUBE_MAP
             // NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_PASS_THROUGH?
         }
@@ -762,46 +764,41 @@ void combiner_set_texture_env(texture_unit_t *stages[4])
         pb = pb_push1(pb, ALPHA_OCW_REGISTER, ALPHA_OUT);
     }
 
-    // Stage 2 is reserved for clip planes;
+    #if (0)
+    // Stage 3 is reserved for clip planes;
     // Each stage can take 4 clip planes
-    const GLboolean any_clip_enabled =
-        context->transformation_state.clip_plane_enabled[0] || context->transformation_state.clip_plane_enabled[1] ||
-        context->transformation_state.clip_plane_enabled[2] || context->transformation_state.clip_plane_enabled[3];
-    const GLuint clip_stage = 2;
-    if (any_clip_enabled && stages[clip_stage] == NULL) {
-        // Enable the clip plane in the combiner stage
-        shader_program[clip_stage] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE;
-
-        // Enable the clip plane "texture"
-        pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (clip_stage * 64), NV097_SET_TEXTURE_CONTROL0_ENABLE);
-
-        if (context->transformation_state.clip_plane_dirty == GL_TRUE) {
-
-            // Enable clip planes, using eye coords
+    if (context->transformation_state.clip_plane_dirty == GL_TRUE) {
+        const GLuint clip_stage = 3;
+        vec4 *clip_plane = context->transformation_state.clip_plane;
+        for (GLint i = 0; i < GLI_MAX_CLIP_PLANES; i++) {
+            if (!context->transformation_state.clip_plane_enabled[i]) {
+                continue;
+            }
+            pb = pb_push4f(pb,
+                           NV097_SET_TEXGEN_PLANE_S + (clip_stage * 64 + i * 16),
+                           clip_plane[i][0],
+                           clip_plane[i][1],
+                           clip_plane[i][2],
+                           clip_plane[i][3]);
+        }
+        const GLboolean clip0_enabled = context->transformation_state.clip_plane_enabled[0];
+        const GLboolean clip1_enabled = context->transformation_state.clip_plane_enabled[1];
+        const GLboolean clip2_enabled = context->transformation_state.clip_plane_enabled[2];
+        const GLboolean clip3_enabled = context->transformation_state.clip_plane_enabled[3];
+        const GLboolean any_clip_enabled = clip0_enabled || clip1_enabled || clip2_enabled || clip3_enabled;
+        if (any_clip_enabled) {
+            pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (clip_stage * 64), NV097_SET_TEXTURE_CONTROL0_ENABLE);
             pb = pb_push4(pb,
                           NV097_SET_TEXGEN_S + (clip_stage * 16),
                           NV097_SET_TEXGEN_S_EYE_LINEAR,  // S
                           NV097_SET_TEXGEN_S_EYE_LINEAR,  // T
                           NV097_SET_TEXGEN_S_EYE_LINEAR,  // R
                           NV097_SET_TEXGEN_S_EYE_LINEAR); // Q
-
-            // Push clip plane coords
-            vec4 *clip_plane = context->transformation_state.clip_plane;
-            for (GLint i = 0; i < GLI_MAX_CLIP_PLANES; i++) {
-                if (!context->transformation_state.clip_plane_enabled[i]) {
-                    continue;
-                }
-                pb = pb_push4f(pb,
-                               NV097_SET_TEXGEN_PLANE_S + (clip_stage * 64 + i * 16),
-                               clip_plane[i][0],
-                               clip_plane[i][1],
-                               clip_plane[i][2],
-                               clip_plane[i][3]);
-            }
         } else {
             pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (clip_stage * 64), 0x0);
         }
     }
+        #endif
 
     // Set shader stage programs
     pb = pb_push1(pb,

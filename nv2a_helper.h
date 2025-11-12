@@ -26,7 +26,7 @@
 struct texture_unit;
 
 void combiner_init(void);
-void combiner_set_texture_env(struct texture_unit *stages[4]);
+void combiner_set_texture_env(GLbyte xgu_to_gl_unit[4]);
 uint32_t *combiner_specular_fog_config(uint32_t *p, GLboolean fog_enabled, GLboolean specular_enabled);
 
 XguVertexArrayType _gl_enum_to_xgu_type(GLenum type);
@@ -45,7 +45,6 @@ XguTexFormatColor _gl_enum_to_xgu_tex_format(GLenum format, GLenum type, GLuint 
 
 typedef struct xgu_texture
 {
-    GLint texture_stage;
     GLint data_width;
     GLint data_height;
     GLint tex_width;
@@ -62,6 +61,11 @@ typedef struct xgu_texture
     GLubyte *data;
     GLubyte *data_physical_address;
 } xgu_texture_t;
+
+typedef struct nv2a_texture_env {
+    GLbyte xgu_to_gl_unit[GLI_MAX_TEXTURE_UNITS];
+    vec4 xgu_unit_current_texcoord[GLI_MAX_TEXTURE_UNITS];
+} nv2a_texture_env_t;
 
 #define PHYSICAL_MEMORY(x) ((void *)((uintptr_t)x & 0x03FFFFFF))
 

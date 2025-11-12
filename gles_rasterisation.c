@@ -157,10 +157,14 @@ GL_API void GL_APIENTRY glPointParameterf(GLenum pname, GLfloat param)
 
     switch (pname) {
         case GL_POINT_SIZE_MIN:
-            r->point_size_min = param;
+            r->point_size_min = glm_clamp(param,
+                                           context->implementation_limits.aliased_point_size_range[0],
+                                           r->point_size_max);
             break;
         case GL_POINT_SIZE_MAX:
-            r->point_size_max = param;
+            r->point_size_max = glm_clamp(param,
+                                           r->point_size_min,
+                                           context->implementation_limits.aliased_point_size_range[1]);
             break;
         case GL_POINT_FADE_THRESHOLD_SIZE:
             context->rasterization_state.point_fade_threshold_size = param;

@@ -337,14 +337,7 @@ GL_API void GL_APIENTRY glMultiTexCoord4f(GLenum tex, GLfloat s, GLfloat t, GLfl
     const GLenum unit = tex - GL_TEXTURE0;
     glm_vec4_copy((vec4){s, t, r, q}, context->current_values.current_texcoord[unit]);
 
-    uint32_t *pb = pb_begin();
-    pb = xgu_set_vertex_data4f(pb,
-                               XGU_TEXCOORD0_ARRAY + unit,
-                               cv->current_texcoord[unit][0],
-                               cv->current_texcoord[unit][1],
-                               cv->current_texcoord[unit][2],
-                               cv->current_texcoord[unit][3]);
-    pb_end(pb);
+    // This is flushed to hardware in gliTextureFlush
 }
 
 GL_API void GL_APIENTRY glMultiTexCoord4x(GLenum tex, GLfixed s, GLfixed t, GLfixed r, GLfixed q)
@@ -497,36 +490,7 @@ void gliArrayFlush(void)
     }
 
     // Texture
-    for (GLuint texture = 0; texture < GLI_MAX_TEXTURE_UNITS; texture++) {
-        const GLuint active_texture = texture;
-        if (vad->texcoord_array_dirty[active_texture]) {
-            const GLint texture_slot = XGU_TEXCOORD0_ARRAY + active_texture;
-            if (vad->texcoord_array_enabled[active_texture]) {
-
-                XguVertexArrayType format = _gl_enum_to_xgu_type(vad->texcoord_array_type[active_texture]);
-                unsigned int stride = vad->texcoord_array_stride[active_texture];
-                if (stride == 0) {
-                    stride = vad->texcoord_array_size[active_texture] *
-                             _gl_enum_to_byte_size(vad->texcoord_array_type[active_texture]);
-                }
-
-                // If a buffer is bound, get the actual data pointer from the buffer object then use the ptr as a offset
-                if (vad->texcoord_array_buffer_binding[active_texture] != 0) {
-                    buffer_object_t *buffer = gliGetBufferObject(vad->texcoord_array_buffer_binding[active_texture]);
-                    assert(buffer != NULL);
-                    array_ptr =
-                        (void *)((uintptr_t)buffer->buffer_data + (uintptr_t)vad->texcoord_array_ptr[active_texture]);
-                } else {
-                    array_ptr = vad->texcoord_array_ptr[active_texture];
-                }
-                xgux_set_attrib_pointer(
-                    texture_slot, format, vad->texcoord_array_size[active_texture], stride, array_ptr);
-            } else {
-                xgux_set_attrib_pointer(texture_slot, XGU_FLOAT, 0, 0, 0);
-            }
-            vad->texcoord_array_dirty[active_texture] = GL_FALSE;
-        }
-    }
+    // This is flushed per-texture-unit in gliTextureFlush
 
     // Point Size
     if (vad->point_size_array_dirty) {
