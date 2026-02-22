@@ -18,6 +18,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 ```
 add_subdirectory(path/to/nxdk-gles11)
 target_link_libraries(myapp PRIVATE GLESv1_CM)
+target_link_libraries(myapp PRIVATE ${NXDK_DIR}/lib/libpbkit.lib)
 ```
 ### Makefile
 Fixme
