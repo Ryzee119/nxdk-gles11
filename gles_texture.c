@@ -1078,29 +1078,54 @@ GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
 GL_API void GL_APIENTRY glCopyTexImage2D(
     GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)
 {
-    assert(0 && "glCopyTexImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)internalformat;
-    (void)x;
-    (void)y;
-    (void)width;
-    (void)height;
-    (void)border;
+    GLenum format = internalformat;
+    GLenum type = GL_UNSIGNED_BYTE;
+    GLsizei bytes_per_pixel = 0;
+
+    switch (internalformat) {
+    case GL_ALPHA:
+    case GL_LUMINANCE:
+        bytes_per_pixel = 1;
+        break;
+    case GL_LUMINANCE_ALPHA:
+        bytes_per_pixel = 2;
+        break;
+    case GL_RGB:
+        bytes_per_pixel = 3;
+        break;
+    case GL_RGBA:
+        bytes_per_pixel = 4;
+        break;
+    default:
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    void *pixels = GLI_MALLOC(width * height * bytes_per_pixel);
+    if (!pixels) {
+        gliSetError(GL_OUT_OF_MEMORY);
+        return;
+    }
+
+    glReadPixels(x, y, width, height, format, type, pixels);
+    glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+    GLI_FREE(pixels);
 }
 
 GL_API void GL_APIENTRY
 glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei w, GLsizei h)
 {
-    assert(0 && "glCopyTexSubImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)xoff;
-    (void)yoff;
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
+    GLenum format = GL_RGBA;
+    GLenum type = GL_UNSIGNED_BYTE;
+    void *pixels = GLI_MALLOC(w * h * 4);
+    if (!pixels) {
+        gliSetError(GL_OUT_OF_MEMORY);
+        return;
+    }
+
+    glReadPixels(x, y, w, h, format, type, pixels);
+    glTexSubImage2D(target, level, xoff, yoff, w, h, format, type, pixels);
+    GLI_FREE(pixels);
 }
 
 void gliTextureFlush(void)
