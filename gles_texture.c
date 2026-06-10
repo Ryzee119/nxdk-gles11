@@ -862,6 +862,14 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
 
         if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
             GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+            if (!converted_pixels) {
+                if (xgu_texture->data) {
+                    MmFreeContiguousMemory(xgu_texture->data);
+                }
+                GLI_FREE(xgu_texture);
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
             rgb_to_rgba_opaque(src_pixels, converted_pixels, width * height);
             src_pixels = converted_pixels;
         }
@@ -874,7 +882,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                          src_pitch,
                          xgu_texture->bytes_per_pixel);
         } else {
-            for (GLuint y = 0; y < (GLuint)height; y++) {
+            for (GLsizei y = 0; y < height; y++) {
                 memcpy(dst_pixels + y * xgu_texture->pitch, src_pixels + y * src_pitch, width * bytes_per_pixel);
             }
         }
@@ -888,6 +896,15 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
     texture_object_t *texture_object = texture_unit->bound_texture_object;
+
+    if (texture_object->texture_2d) {
+        xgu_texture_t *old_tex = texture_object->texture_2d;
+        if (old_tex->data) {
+            MmFreeContiguousMemory(old_tex->data);
+        }
+        GLI_FREE(old_tex);
+    }
+
     texture_object->texture_2d = xgu_texture;
     texture_object->texture_object_dirty = GL_TRUE;
 }
@@ -896,22 +913,124 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
                                         GLint level,
                                         GLint xoff,
                                         GLint yoff,
-                                        GLsizei w,
-                                        GLsizei h,
+                                        GLsizei width,
+                                        GLsizei height,
                                         GLenum format,
                                         GLenum type,
                                         const void *pixels)
 {
-    assert(0 && "glTexSubImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)xoff;
-    (void)yoff;
-    (void)w;
-    (void)h;
-    (void)format;
-    (void)type;
-    (void)pixels;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (format != GL_ALPHA && format != GL_RGB && format != GL_RGBA && format != GL_LUMINANCE &&
+        format != GL_LUMINANCE_ALPHA) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_SHORT_5_6_5 && type != GL_UNSIGNED_SHORT_4_4_4_4 &&
+        type != GL_UNSIGNED_SHORT_5_5_5_1) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (level != 0) {
+        // FIXME: Mipmaps not implemented yet
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    if (width < 0 || height < 0 || xoff < 0 || yoff < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
+    texture_object_t *texture_object = texture_unit->bound_texture_object;
+    xgu_texture_t *xgu_texture = texture_object->texture_2d;
+
+    if (!xgu_texture) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (width > xgu_texture->tex_width || height > xgu_texture->tex_height ||
+        xoff > xgu_texture->tex_width - width || yoff > xgu_texture->tex_height - height) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    if (pixels != NULL) {
+        const GLint alignment = context->pixel_store.unpack_alignment;
+        const size_t bytes_per_pixel = xgu_texture->bytes_per_pixel;
+        const size_t src_pitch =
+            (((size_t)width * bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
+
+        const GLubyte *src_pixels = (const GLubyte *)pixels;
+        GLubyte *dst_pixels = xgu_texture->data;
+
+        if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
+            GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+            if (!converted_pixels) {
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
+            rgb_to_rgba_opaque(src_pixels, converted_pixels, width * height);
+            src_pixels = converted_pixels;
+        }
+
+        if (xgu_texture->swizzled) {
+            // Unswizzle the whole texture into a temporary linear buffer
+            size_t tex_linear_size = xgu_texture->pitch * xgu_texture->data_height;
+            GLubyte *linear_buf = GLI_MALLOC(tex_linear_size);
+            if (!linear_buf) {
+                if (src_pixels != (const GLubyte *)pixels) {
+                    GLI_FREE((void *)src_pixels);
+                }
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
+            unswizzle_rect(dst_pixels,
+                           xgu_texture->tex_width,
+                           xgu_texture->tex_height,
+                           linear_buf,
+                           xgu_texture->pitch,
+                           xgu_texture->bytes_per_pixel);
+
+            // Copy sub-image to the linear buffer
+            for (GLsizei y = 0; y < height; y++) {
+                memcpy(linear_buf + (yoff + y) * xgu_texture->pitch + xoff * bytes_per_pixel,
+                       src_pixels + y * src_pitch,
+                       width * bytes_per_pixel);
+            }
+
+            // Swizzle back into the texture buffer
+            swizzle_rect(linear_buf,
+                         xgu_texture->tex_width,
+                         xgu_texture->tex_height,
+                         dst_pixels,
+                         xgu_texture->pitch,
+                         xgu_texture->bytes_per_pixel);
+
+            GLI_FREE(linear_buf);
+        } else {
+            // Unswizzled, just copy directly into the correct location
+            for (GLsizei y = 0; y < height; y++) {
+                memcpy(dst_pixels + (yoff + y) * xgu_texture->pitch + xoff * bytes_per_pixel,
+                       src_pixels + y * src_pitch,
+                       width * bytes_per_pixel);
+            }
+        }
+
+        if (src_pixels != (const GLubyte *)pixels) {
+            GLI_FREE((void *)src_pixels);
+        }
+    }
 }
 
 GL_API void GL_APIENTRY glCompressedTexImage2D(GLenum target,

@@ -70,7 +70,8 @@ int main (int argc, char **argv)
 * [ ] Lots of FIXMEs
 * [ ] Mipmaps
 * [ ] Framebuffer Objects
-* [ ] glTexSubImage2D, glCopyTexImage2D, glCopyTexSubImage2D (and compressed?)
+* [x] glTexSubImage2D
+* [ ] glCopyTexImage2D, glCopyTexSubImage2D (and compressed?)
 * [ ] Replace swizzle code with something more permissive (MIT etc)
 
 ## Attribution
