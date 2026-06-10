@@ -839,7 +839,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     // Width must be atleast 8 pixels
     xgu_texture->data_width = GLI_MAX(8, xgu_texture->data_width);
     xgu_texture->data_height = GLI_MAX(8, xgu_texture->data_height);
-    xgu_texture->pitch = xgu_texture->data_width * bytes_per_pixel;
+    xgu_texture->pitch = xgu_texture->data_(size_t)(size_t)width * (size_t)bytes_per_pixel;
 
     xgu_texture->format = xgu_format;
     xgu_texture->data = MmAllocateContiguousMemoryEx(
@@ -861,7 +861,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         GLubyte *dst_pixels = xgu_texture->data;
 
         if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
-            GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+            GLubyte *converted_pixels = GLI_MALLOC(src_pitch * (size_t)height);
             if (!converted_pixels) {
                 if (xgu_texture->data) {
                     MmFreeContiguousMemory(xgu_texture->data);
@@ -870,7 +870,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                 gliSetError(GL_OUT_OF_MEMORY);
                 return;
             }
-            rgb_to_rgba_opaque(src_pixels, converted_pixels, width * height);
+            rgb_to_rgba_opaque(src_pixels, converted_pixels, (size_t)width * (size_t)height);
             src_pixels = converted_pixels;
         }
 
@@ -882,8 +882,8 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                          src_pitch,
                          xgu_texture->bytes_per_pixel);
         } else {
-            for (GLsizei y = 0; y < height; y++) {
-                memcpy(dst_pixels + y * xgu_texture->pitch, src_pixels + y * src_pitch, width * bytes_per_pixel);
+            for (GLsizei row = 0; row < height; row++) {
+                memcpy(dst_pixels + row * xgu_texture->pitch, src_pixels + row * src_pitch, (size_t)(size_t)width * (size_t)bytes_per_pixel);
             }
         }
 
@@ -969,18 +969,18 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
         const GLint alignment = context->pixel_store.unpack_alignment;
         const size_t bytes_per_pixel = xgu_texture->bytes_per_pixel;
         const size_t src_pitch =
-            (((size_t)width * bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
+            (((size_t)(size_t)(size_t)width * (size_t)bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
 
         const GLubyte *src_pixels = (const GLubyte *)pixels;
         GLubyte *dst_pixels = xgu_texture->data;
 
         if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
-            GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+            GLubyte *converted_pixels = GLI_MALLOC(src_pitch * (size_t)height);
             if (!converted_pixels) {
                 gliSetError(GL_OUT_OF_MEMORY);
                 return;
             }
-            rgb_to_rgba_opaque(src_pixels, converted_pixels, width * height);
+            rgb_to_rgba_opaque(src_pixels, converted_pixels, (size_t)width * (size_t)height);
             src_pixels = converted_pixels;
         }
 
@@ -1003,10 +1003,10 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
                            xgu_texture->bytes_per_pixel);
 
             // Copy sub-image to the linear buffer
-            for (GLsizei y = 0; y < height; y++) {
-                memcpy(linear_buf + (yoff + y) * xgu_texture->pitch + xoff * bytes_per_pixel,
-                       src_pixels + y * src_pitch,
-                       width * bytes_per_pixel);
+            for (GLsizei row = 0; row < height; row++) {
+                memcpy(linear_buf + (yoff + row) * xgu_texture->pitch + xoff * bytes_per_pixel,
+                       src_pixels + row * src_pitch,
+                       (size_t)(size_t)width * (size_t)bytes_per_pixel);
             }
 
             // Swizzle back into the texture buffer
@@ -1020,10 +1020,10 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
             GLI_FREE(linear_buf);
         } else {
             // Unswizzled, just copy directly into the correct location
-            for (GLsizei y = 0; y < height; y++) {
-                memcpy(dst_pixels + (yoff + y) * xgu_texture->pitch + xoff * bytes_per_pixel,
-                       src_pixels + y * src_pitch,
-                       width * bytes_per_pixel);
+            for (GLsizei row = 0; row < height; row++) {
+                memcpy(dst_pixels + (yoff + row) * xgu_texture->pitch + xoff * bytes_per_pixel,
+                       src_pixels + row * src_pitch,
+                       (size_t)(size_t)width * (size_t)bytes_per_pixel);
             }
         }
 
@@ -1101,7 +1101,7 @@ GL_API void GL_APIENTRY glCopyTexImage2D(
         return;
     }
 
-    void *pixels = GLI_MALLOC(width * height * bytes_per_pixel);
+    void *pixels = GLI_MALLOC((size_t)width * (size_t)height * (size_t)bytes_per_pixel);
     if (!pixels) {
         gliSetError(GL_OUT_OF_MEMORY);
         return;
@@ -1113,18 +1113,18 @@ GL_API void GL_APIENTRY glCopyTexImage2D(
 }
 
 GL_API void GL_APIENTRY
-glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei w, GLsizei h)
+glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei width, GLsizei height)
 {
     GLenum format = GL_RGBA;
     GLenum type = GL_UNSIGNED_BYTE;
-    void *pixels = GLI_MALLOC(w * h * 4);
+    void *pixels = GLI_MALLOC((size_t)width * (size_t)height * 4);
     if (!pixels) {
         gliSetError(GL_OUT_OF_MEMORY);
         return;
     }
 
-    glReadPixels(x, y, w, h, format, type, pixels);
-    glTexSubImage2D(target, level, xoff, yoff, w, h, format, type, pixels);
+    glReadPixels(x, y, width, height, format, type, pixels);
+    glTexSubImage2D(target, level, xoff, yoff, width, height, format, type, pixels);
     GLI_FREE(pixels);
 }
 
