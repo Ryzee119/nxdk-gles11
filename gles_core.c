@@ -589,7 +589,7 @@ void glContextInit(GLint window_width, GLint window_height)
     for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
         glm_vec4_copy(GLM_VEC4_BLACK, context->current_values.current_texcoord[i]);
     }
-    glm_vec4_copy(GLM_ZUP, context->current_values.current_normal);
+    glm_vec3_copy(GLM_ZUP, context->current_values.current_normal);
 
     /* --- Table 6.4/6.5: Client vertex array state --- */
     context->vertex_array_data.client_active_texture = GL_TEXTURE0;
