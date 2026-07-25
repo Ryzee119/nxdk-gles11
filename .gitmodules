@@ -1,3 +1,6 @@
 [submodule "lib/cglm"]
 	path = lib/cglm
 	url = https://github.com/recp/cglm.git
+[submodule "lib/arena"]
+	path = lib/arena
+	url = https://github.com/Ryzee119/arena.git

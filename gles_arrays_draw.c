@@ -225,6 +225,10 @@ GL_API void GL_APIENTRY glDrawArrays(GLenum mode, GLint first, GLsizei count)
         return;
     }
 
+    if (!gliStageClientArrays(first + count)) {
+        return;
+    }
+
     gliFlushStateChange();
     xgux_draw_arrays(primitive, first, count);
 }
@@ -253,9 +257,15 @@ GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, 
         return;
     }
 
-    gliFlushStateChange();
-
     const void *indices_ptr = gliGetBufferPointer(context->vertex_array_data.element_array_buffer_binding, indices);
+
+    // Scan indices to find vertex range, then stage client arrays
+    GLsizei max_index = gliScanMaxIndex(type, indices_ptr, count);
+    if (!gliStageClientArrays(max_index + 1)) {
+        return;
+    }
+
+    gliFlushStateChange();
 
     if (type == GL_UNSIGNED_SHORT) {
         xgux_draw_elements16(primitive, (const uint16_t *)indices_ptr, (unsigned int)count);

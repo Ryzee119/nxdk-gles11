@@ -12,6 +12,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Point Sprites
 * [x] Clip Planes
 * [x] Alpha/Depth/Stencil Functions
+* [x] Automatic client-side array staging (malloc/stack memory)
 
 ## How to use
 ### CMake
@@ -33,8 +34,8 @@ int main (int argc, char **argv)
     XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
     glContextInit(640, 480);
 
-    // In real code you would want to allocate memory with MmAllocateContiguousMemory and use that for your vertex
-    // data, but for this simple test we can just use the stack.
+    // nxdk-gles11 automatically stages client-side arrays (like stack/malloc memory) 
+    // into GPU-accessible memory, so you can pass them directly to gl*Pointer.
     GLfloat vertices[] = {
          0.0f,  0.5f, 0.0f,
         -0.5f, -0.5f, 0.0f, 
@@ -65,6 +66,13 @@ int main (int argc, char **argv)
     return 0;
 }
 ```
+
+## Client-Side Array Staging
+The NV2A GPU requires vertex data to be in physically contiguous memory to read it via DMA. nxdk-gles11 includes a staging arena that automatically handles copying client-side arrays (e.g., from `malloc` or the stack) into contiguous, GPU-accessible memory before drawing.
+
+* **VBOs:** If you use Vertex Buffer Objects (`glGenBuffers`, `glBindBuffer`), the data is already stored in contiguous memory and staging is bypassed for maximum performance.
+* **Arena Size:** The staging arena defaults to 2MB. If you have very large client-side draws and see an out-of-memory error in the debug output, you can increase this by defining `GLI_STAGING_ARENA_SIZE` before building.
+
 
 ## Todo
 * [ ] Lots of FIXMEs
