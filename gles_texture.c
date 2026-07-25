@@ -84,6 +84,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->texture_binding_2d = 0;
         texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
+        context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
         return;
     }
 
@@ -93,6 +94,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->texture_binding_2d = texture;
         texture_unit->bound_texture_object = texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
+        context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
         return;
     }
 
@@ -119,6 +121,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     // Bind the object to the texture_unit
     texture_unit->texture_binding_2d = texture;
     texture_unit->bound_texture_object = texture_object;
+    context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
 
     // Add the object to the context's list
     texture_object->next = context->texture_environment.texture_objects;
