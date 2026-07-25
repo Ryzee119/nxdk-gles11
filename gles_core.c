@@ -407,6 +407,10 @@ GL_API void GL_APIENTRY glDepthMask(GLboolean flag)
 GL_API void GL_APIENTRY glClear(GLbitfield mask)
 {
     gli_context_t *context = gliGetContext();
+
+    // Reset staging arena at frame boundary
+    gliStagingReset();
+
     uint32_t nv_clear_mask = 0;
     if (mask & GL_COLOR_BUFFER_BIT) {
         nv_clear_mask |= NV097_CLEAR_SURFACE_COLOR;
@@ -938,6 +942,8 @@ void glContextInit(GLint window_width, GLint window_height)
     glClearStencil(context->framebuffer_control.clear_stencil);
 
     gliFlushStateChange();
+
+    gliStagingInit();
 
     while (pb_busy()) {
     }

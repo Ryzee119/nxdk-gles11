@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "nv2a_helper.h"
+#include <arena.h>
 
 #define GLI_MIN(a, b)       (((a)) < ((b)) ? (a) : (b))
 #define GLI_MAX(a, b)       (((a)) > ((b)) ? (a) : (b))
@@ -45,6 +46,9 @@
 #endif
 #ifndef GLI_PACK_ALIGNMENT
 #define GLI_PACK_ALIGNMENT 4
+#endif
+#ifndef GLI_STAGING_ARENA_SIZE
+#define GLI_STAGING_ARENA_SIZE (2 * 1024 * 1024)
 #endif
 #ifndef GLI_MAX_TEXTURE_SIZE
 #define GLI_MAX_TEXTURE_SIZE 64
@@ -448,12 +452,21 @@ typedef struct
     hints_state_t hints_state;
     implementation_limits_t implementation_limits;
     GLenum last_error;
+
+    // GPU staging arena for client-side vertex arrays
+    arena_t staging_arena;
+    void *staging_arena_pool; // MmAllocateContiguousMemoryEx backing memory
 } gli_context_t;
 
 void gliFlushStateChange(void);
 int gliDebugF(const char *fmt, ...);
 void gliSetError(GLenum error);
 void gliArrayFlush(void);
+void gliStagingInit(void);
+void gliStagingDestroy(void);
+void gliStagingReset(void);
+GLboolean gliStageClientArrays(GLsizei vertex_count);
+GLsizei gliScanMaxIndex(GLenum type, const void *indices, GLsizei count);
 void gliLightingFlush(void);
 void gliTransformFlush(void);
 void gliTextureFlush(void);
