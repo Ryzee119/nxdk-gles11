@@ -785,7 +785,7 @@ void glContextInit(GLint window_width, GLint window_height)
     context->rasterization_state.point_size = 1.0f;
     context->rasterization_state.point_smooth_enabled = GL_FALSE;
     context->rasterization_state.point_size_min = 0.0f;
-    context->rasterization_state.point_size_max = 1.0f;
+    context->rasterization_state.point_size_max = context->implementation_limits.aliased_point_size_range[1];
     context->rasterization_state.point_fade_threshold_size = 1.0f;
     context->rasterization_state.point_distance_attenuation[0] = 1.0f;
     context->rasterization_state.point_distance_attenuation[1] = 0.0f;
