@@ -1006,9 +1006,6 @@ void gliTextureFlush(void)
             uint32_t *pb = pb_begin();
             pb = xgu_set_texture_control0(pb, i, false, 0, 0);
             pb = xgu_set_texture_matrix_enable(pb, i, false);
-            // This might be a xemu thing only, but i need some kind of valid texture format here or we assert
-            // in cases when point sprites are enabled and we used stage 3 for a non-texture (like a clip plane)
-            pb = xgu_set_texture_format(pb, i, 2, false, XGU_SOURCE_COLOR, 2, XGU_TEXTURE_FORMAT_Y8, 1, 0, 0, 0);
             pb_end(pb);
 
             texture_unit->texture_unit_dirty = GL_TRUE;
