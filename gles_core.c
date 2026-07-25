@@ -738,8 +738,8 @@ void glContextInit(GLint window_width, GLint window_height)
     context->lighting_state.color_material_enabled = GL_FALSE;
     glDisable(GL_COLOR_MATERIAL);
 
-    glm_vec2_copy((vec4){0.2f, 0.2f, 0.2f, 1.0f}, context->lighting_state.material_front.ambient);
-    glm_vec2_copy((vec4){0.8f, 0.8f, 0.8f, 1.0f}, context->lighting_state.material_front.diffuse);
+    glm_vec4_copy((vec4){0.2f, 0.2f, 0.2f, 1.0f}, context->lighting_state.material_front.ambient);
+    glm_vec4_copy((vec4){0.8f, 0.8f, 0.8f, 1.0f}, context->lighting_state.material_front.diffuse);
     glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_front.specular);
     glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_front.emission);
     context->lighting_state.material_front.shininess = 0.0f;
