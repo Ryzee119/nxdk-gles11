@@ -515,11 +515,21 @@ void combiner_set_texture_env(void)
             continue;
         }
 
-        // Point sprites must be on stage 3. Let's just warn about it for now.
         const GLboolean is_point_sprite =
             texture_unit->coord_replace_oes_enabled && context->rasterization_state.point_sprite_oes_enabled;
-        if (is_point_sprite && i != 3) {
-            GLI_DEBUG_PRINT("Point sprite texture unit %u must be on texture unit 3\n", i);
+        if (is_point_sprite) {
+             // Point sprites must be on stage 3. Let's just warn about it for now.
+            if (i != 3) {
+                GLI_DEBUG_PRINT("Point sprite texture unit %u must be on texture unit 3\n", i);
+            }
+
+            // Point sprites must be NPOT and swizzled too
+            if (texture_unit->bound_texture_object) {
+                const xgu_texture_t *xgu_texture = texture_unit->bound_texture_object->texture_2d;
+                if (!xgu_texture->swizzled) {
+                    GLI_DEBUG_PRINT("Point sprite texture unit %u must be POT and swizzled\n", i);
+                }
+            }
         }
 
         DWORD STAGE_INPUT = (s == 0) ? REG_COLOR0 : REG_SPARE0;
