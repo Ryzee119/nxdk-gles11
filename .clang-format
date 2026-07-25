@@ -11,13 +11,13 @@ BraceWrapping:
   AfterExternBlock: false
   BeforeElse: false
   AfterUnion: true
-  AfterInitializerList: true
+
 
 Cpp11BracedListStyle: true
 AllowAllConstructorInitializersOnNextLine: false
 BinPackArguments: false
 BinPackParameters: false
-BinPackInitializerLists: false
+
 AlignArrayOfStructures: Left
 
 TypeNames: [VOID, PVOID, LPVOID]

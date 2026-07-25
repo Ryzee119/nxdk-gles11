@@ -3,9 +3,9 @@
 #include <GLES/gl.h>
 #include <GLES/glext.h>
 #include <stb_sprintf.h>
+#include <xboxkrnl/xboxkrnl.h>
 #include <xgu.h>
 #include <xgux.h>
-#include <xboxkrnl/xboxkrnl.h>
 
 #include <assert.h>
 #include <limits.h>
@@ -261,9 +261,9 @@ typedef struct
 
 typedef struct
 {
-    
+
     GLboolean lighting_enabled;
-    
+
     material_t material_front;
     material_t material_back;
 

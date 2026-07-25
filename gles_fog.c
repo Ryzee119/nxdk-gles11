@@ -40,7 +40,7 @@ GL_API void GL_APIENTRY glFogfv(GLenum pname, const GLfloat *params)
     switch (pname) {
         case GL_FOG_COLOR:
             glm_vec4_copy((GLfloat *)params, context->coloring_state.fog_color);
-            // All color components are clamped to the range 0 to 1 
+            // All color components are clamped to the range 0 to 1
             glm_vec4_clamp(context->coloring_state.fog_color, 0.0f, 1.0f);
             break;
         default:
