@@ -474,13 +474,13 @@ void gliLightingFlush(void)
         } else {
             // material ambient comes from vertex color so dont add them here
             // In this case the emission register is used?
-            ambient[0] = lighting->light_model_ambient[0];
-            ambient[1] = lighting->light_model_ambient[1];
-            ambient[2] = lighting->light_model_ambient[2];
+            ambient[0] = material->emission[0];
+            ambient[1] = material->emission[1];
+            ambient[2] = material->emission[2];
 
-            emission[0] = material->emission[0];
-            emission[1] = material->emission[1];
-            emission[2] = material->emission[2];
+            emission[0] = lighting->light_model_ambient[0];
+            emission[1] = lighting->light_model_ambient[1];
+            emission[2] = lighting->light_model_ambient[2];
         }
 
         if (i == 0) {
@@ -588,9 +588,15 @@ void gliLightingFlush(void)
             }
 
             // Light ambient
-            xgu_v.r = light->ambient[0] * lighting->light_model_ambient[0];
-            xgu_v.g = light->ambient[1] * lighting->light_model_ambient[1];
-            xgu_v.b = light->ambient[2] * lighting->light_model_ambient[2];
+            if (!lighting->color_material_enabled) {
+                xgu_v.r = light->ambient[0] * material->ambient[0];
+                xgu_v.g = light->ambient[1] * material->ambient[1];
+                xgu_v.b = light->ambient[2] * material->ambient[2];
+            } else {
+                xgu_v.r = light->ambient[0];
+                xgu_v.g = light->ambient[1];
+                xgu_v.b = light->ambient[2];
+            }
             if (j == 0) {
                 pb = xgu_set_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
             } else {
