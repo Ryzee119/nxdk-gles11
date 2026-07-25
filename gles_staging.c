@@ -182,6 +182,13 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
         vad->point_size_array_dirty = GL_FALSE;
     }
 
+    __asm__ __volatile__("sfence");
+    if (range_count > 0) {
+        uint32_t *pb = pb_begin();
+        pb = pb_push1(pb, NV097_BREAK_VERTEX_BUFFER_CACHE, 0);
+        pb_end(pb);
+    }
+
     return GL_TRUE;
 
 out_of_memory:
