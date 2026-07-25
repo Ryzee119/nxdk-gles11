@@ -2,7 +2,6 @@
 
 #include <GLES/gl.h>
 #include <GLES/glext.h>
-#include <cglm/cglm.h>
 #include <stb_sprintf.h>
 #include <xgu.h>
 #include <xgux.h>
@@ -15,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "gles_math.h"
 #include "nv2a_helper.h"
 #include <arena.h>
 
