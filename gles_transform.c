@@ -408,7 +408,7 @@ void gliTransformFlush(void)
         if (!xgu_texture) {
             continue;
         }
-    
+
         if (c->transformation_state.texture_matrix_dirty[i]) {
             c->transformation_state.texture_matrix_dirty[i] = GL_FALSE;
             mat4 texture_matrix;

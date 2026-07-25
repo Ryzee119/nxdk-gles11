@@ -587,7 +587,7 @@ void gliLightingFlush(void)
                 pb = xgu_set_back_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
             }
 
-            // Light ambient 
+            // Light ambient
             xgu_v.r = light->ambient[0] * lighting->light_model_ambient[0];
             xgu_v.g = light->ambient[1] * lighting->light_model_ambient[1];
             xgu_v.b = light->ambient[2] * lighting->light_model_ambient[2];

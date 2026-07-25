@@ -11,7 +11,8 @@
 
 // Tracks a source range that has already been copied into the arena,
 // so that interleaved arrays sharing the same memory block are only copied once.
-typedef struct {
+typedef struct
+{
     const uint8_t *src_start;
     const uint8_t *src_end;
     uint8_t *dst_start;
@@ -21,8 +22,8 @@ void gliStagingInit(void)
 {
     gli_context_t *context = gliGetContext();
 
-    void *pool = MmAllocateContiguousMemoryEx(
-        GLI_STAGING_ARENA_SIZE, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    void *pool =
+        MmAllocateContiguousMemoryEx(GLI_STAGING_ARENA_SIZE, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
     assert(pool != NULL);
 
     context->staging_arena_pool = pool;
@@ -46,8 +47,10 @@ void gliStagingReset(void)
 
 // Check if this source range is fully contained within an already-staged range.
 // If so, return the destination pointer adjusted for the offset, otherwise return NULL.
-static void *find_staged_overlap(const staged_range_t *ranges, int count,
-                                 const uint8_t *src_start, const uint8_t *src_end)
+static void *find_staged_overlap(const staged_range_t *ranges,
+                                 int count,
+                                 const uint8_t *src_start,
+                                 const uint8_t *src_end)
 {
     for (int i = 0; i < count; i++) {
         if (src_start >= ranges[i].src_start && src_end <= ranges[i].src_end) {
@@ -60,8 +63,8 @@ static void *find_staged_overlap(const staged_range_t *ranges, int count,
 
 // Copy a source range into the staging arena. Checks for interleaving first.
 // Returns the new GPU-accessible pointer, or NULL on arena overflow.
-static void *stage_range(arena_t *arena, staged_range_t *ranges, int *range_count,
-                         const void *ptr, GLsizei stride, GLsizei vertex_count)
+static void *stage_range(
+    arena_t *arena, staged_range_t *ranges, int *range_count, const void *ptr, GLsizei stride, GLsizei vertex_count)
 {
     const uint8_t *src_start = (const uint8_t *)ptr;
     const uint8_t *src_end = src_start + (vertex_count * stride);
@@ -117,8 +120,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     // --- Vertex array ---
     if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding == 0 && vad->vertex_array_ptr != NULL) {
         GLsizei stride = compute_stride(vad->vertex_array_stride, vad->vertex_array_size, vad->vertex_array_type);
-        void *staged = stage_range(arena, ranges, &range_count,
-                                   vad->vertex_array_ptr, stride, vertex_count);
+        void *staged = stage_range(arena, ranges, &range_count, vad->vertex_array_ptr, stride, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -130,8 +132,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     // --- Normal array ---
     if (vad->normal_array_enabled && vad->normal_array_buffer_binding == 0 && vad->normal_array_ptr != NULL) {
         GLsizei stride = compute_stride(vad->normal_array_stride, 3, vad->normal_array_type);
-        void *staged = stage_range(arena, ranges, &range_count,
-                                   vad->normal_array_ptr, stride, vertex_count);
+        void *staged = stage_range(arena, ranges, &range_count, vad->normal_array_ptr, stride, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -143,8 +144,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     // --- Color array ---
     if (vad->color_array_enabled && vad->color_array_buffer_binding == 0 && vad->color_array_ptr != NULL) {
         GLsizei stride = compute_stride(vad->color_array_stride, vad->color_array_size, vad->color_array_type);
-        void *staged = stage_range(arena, ranges, &range_count,
-                                   vad->color_array_ptr, stride, vertex_count);
+        void *staged = stage_range(arena, ranges, &range_count, vad->color_array_ptr, stride, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -157,16 +157,14 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         if (vad->texcoord_array_enabled[i] && vad->texcoord_array_buffer_binding[i] == 0 &&
             vad->texcoord_array_ptr[i] != NULL) {
-            GLsizei stride = compute_stride(vad->texcoord_array_stride[i], vad->texcoord_array_size[i],
-                                            vad->texcoord_array_type[i]);
-            void *staged = stage_range(arena, ranges, &range_count,
-                                       vad->texcoord_array_ptr[i], stride, vertex_count);
+            GLsizei stride =
+                compute_stride(vad->texcoord_array_stride[i], vad->texcoord_array_size[i], vad->texcoord_array_type[i]);
+            void *staged = stage_range(arena, ranges, &range_count, vad->texcoord_array_ptr[i], stride, vertex_count);
             if (!staged) {
                 goto out_of_memory;
             }
             XguVertexArrayType format = gliEnumToNvType(vad->texcoord_array_type[i]);
-            xgux_set_attrib_pointer(XGU_TEXCOORD0_ARRAY + i, format,
-                                    vad->texcoord_array_size[i], stride, staged);
+            xgux_set_attrib_pointer(XGU_TEXCOORD0_ARRAY + i, format, vad->texcoord_array_size[i], stride, staged);
             vad->texcoord_array_dirty[i] = GL_FALSE;
         }
     }
@@ -175,8 +173,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     if (vad->point_size_array_enabled && vad->point_size_array_buffer_binding == 0 &&
         vad->point_size_array_ptr != NULL) {
         GLsizei stride = compute_stride(vad->point_size_array_stride, 1, vad->point_size_array_type);
-        void *staged = stage_range(arena, ranges, &range_count,
-                                   vad->point_size_array_ptr, stride, vertex_count);
+        void *staged = stage_range(arena, ranges, &range_count, vad->point_size_array_ptr, stride, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }

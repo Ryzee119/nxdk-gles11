@@ -1,28 +1,29 @@
 #pragma once
 #include <GLES/gl.h>
 #include <stb_sprintf.h>
+#include <swizzle.h>
 #include <xgu.h>
 #include <xgux.h>
-#include <swizzle.h>
 
 #include "gles_math.h"
 
 #define GLI_MAX_LIGHTS XGU_LIGHT_COUNT
-#define GLI_MAX_TEXTURE_UNITS XGU_TEXTURE_COUNT // This is shared with clip planes (4 per stage) and only one point sprite can be enabled
-#define GLI_MAX_CLIP_PLANES 4 // One texture unit can handle 4 planes.
-#define GLI_MAX_TEXTURE_SIZE 4096
-#define GLI_VENDOR_STRING "nxdk GLES Renderer"
-#define GLI_RENDERER_STRING "nv2a-based GPU"
+#define GLI_MAX_TEXTURE_UNITS                                                                                          \
+    XGU_TEXTURE_COUNT // This is shared with clip planes (4 per stage) and only one point sprite can be enabled
+#define GLI_MAX_CLIP_PLANES   4 // One texture unit can handle 4 planes.
+#define GLI_MAX_TEXTURE_SIZE  4096
+#define GLI_VENDOR_STRING     "nxdk GLES Renderer"
+#define GLI_RENDERER_STRING   "nv2a-based GPU"
 #define GLI_EXTENSIONS_STRING "GL_OES_element_index_uint GL_OES_point_size_array"
 
 // For line and point sizes xbox takes a 6.3 fix point, total of 9 bits. Max = 0x1FF / 2^3 = 63.875f
 #define GLI_MAX_ALIASED_POINT_SIZE ((float)0x1FF / (float)(1 << 3))
-#define GLI_MAX_SMOOTH_POINT_SIZE ((float)0x1FF / (float)(1 << 3))
+#define GLI_MAX_SMOOTH_POINT_SIZE  ((float)0x1FF / (float)(1 << 3))
 #define GLI_MAX_ALIASED_LINE_WIDTH ((float)0x1FF / (float)(1 << 3))
-#define GLI_MAX_SMOOTH_LINE_WIDTH ((float)0x1FF / (float)(1 << 3))
+#define GLI_MAX_SMOOTH_LINE_WIDTH  ((float)0x1FF / (float)(1 << 3))
 
 #define GLI_DEBUG_PRINT_INCLUDE <xboxkrnl/xboxkrnl.h>
-#define GLI_DEBUG_PRINT(...) DbgPrint(__VA_ARGS__)
+#define GLI_DEBUG_PRINT(...)    DbgPrint(__VA_ARGS__)
 
 #define PB_MASK(mask, val) (((val) << (__builtin_ffs(mask) - 1)) & (mask))
 
@@ -64,17 +65,13 @@ XguTextureAddress gliEnumToNvAddressMode(GLenum wrap);
 XguTexFilter gliEnumToNvTexFilter(GLenum filter);
 XguTexFormatColor gliEnumToNvTexFormat(GLenum format, GLenum type, GLuint *bytes_per_pixel, GLboolean swizzled);
 
-#define FLOAT4_TO_PACKED_ARGB32(f) \
-    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | \
-     (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 16) | \
-     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) |  \
-     (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 0))
+#define FLOAT4_TO_PACKED_ARGB32(f)                                                                                     \
+    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 16) |                       \
+     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) | (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 0))
 
-#define FLOAT4_TO_PACKED_ABGR32(f) \
-    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | \
-     (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 16) | \
-     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) |  \
-     (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 0))
+#define FLOAT4_TO_PACKED_ABGR32(f)                                                                                     \
+    ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | (((GLubyte)((f)[2] * 255.0f) & 0xFF) << 16) |                       \
+     (((GLubyte)((f)[1] * 255.0f) & 0xFF) << 8) | (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 0))
 
 static inline uint32_t npot2pot(uint32_t num)
 {
