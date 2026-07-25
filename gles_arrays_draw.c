@@ -66,6 +66,8 @@ GL_API void GL_APIENTRY glVertexPointer(GLint size, GLenum type, GLsizei stride,
         buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
         assert(buffer != NULL);
         vad->vertex_array_buffer_binding = vad->array_buffer_binding;
+    } else {
+        vad->vertex_array_buffer_binding = 0;
     }
 
     vad->vertex_array_size = size;
@@ -95,6 +97,8 @@ GL_API void GL_APIENTRY glNormalPointer(GLenum type, GLsizei stride, const void 
         buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
         assert(buffer != NULL);
         vad->normal_array_buffer_binding = vad->array_buffer_binding;
+    } else {
+        vad->normal_array_buffer_binding = 0;
     }
 
     vad->normal_array_ptr = ptr;
@@ -127,6 +131,8 @@ GL_API void GL_APIENTRY glColorPointer(GLint size, GLenum type, GLsizei stride, 
         buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
         assert(buffer != NULL);
         vad->color_array_buffer_binding = vad->array_buffer_binding;
+    } else {
+        vad->color_array_buffer_binding = 0;
     }
 
     vad->color_array_size = size;
@@ -164,6 +170,8 @@ GL_API void GL_APIENTRY glTexCoordPointer(GLint size, GLenum type, GLsizei strid
             return;
         }
         vad->texcoord_array_buffer_binding[texture] = vad->array_buffer_binding;
+    } else {
+        vad->texcoord_array_buffer_binding[texture] = 0;
     }
 
     vad->texcoord_array_size[texture] = size;
@@ -196,6 +204,8 @@ GL_API void GL_APIENTRY glPointSizePointerOES(GLenum type, GLsizei stride, const
             return;
         }
         vad->point_size_array_buffer_binding = vad->array_buffer_binding;
+    } else {
+        vad->point_size_array_buffer_binding = 0;
     }
 
     vad->point_size_array_type = type;
