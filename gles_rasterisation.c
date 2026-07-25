@@ -96,8 +96,14 @@ void gliPointParamsFlush(void)
     }
     r->point_params_dirty = GL_FALSE;
 
+    GLfloat min = r->point_size_min;
+    GLfloat max = r->point_size_max;
+    if (min >= max) {
+        max = min + 0.001f;
+    }
+
     // Final Size = (size / range) * sqrt(1/(a+b*d+c*d2))
-    const GLfloat range = r->point_size_max - r->point_size_min;
+    const GLfloat range = max - min;
     const GLfloat size = r->point_size;
     const GLfloat factor = powf(range / size, 2.0f);
 
@@ -109,9 +115,9 @@ void gliPointParamsFlush(void)
     pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SIZE_RANGE, range);
     // Duplicate? xdk sends same value 3 times
     pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SIZE_RANGE_DUP_1, range);
-    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SIZE_RANGE_DUP_2, range);
-    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SCALE_BIAS, -r->point_size_min / range); // What xdk seems to do
-    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_MIN_SIZE, r->point_size_min);
+    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SIZE_RANGE_DUP_2, range); 
+    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_SCALE_BIAS, -min / range);
+    pb = push_command_float(pb, NV097_SET_POINT_PARAMS_MIN_SIZE, min);
     // FIXME point_fade_threshold_size? How ?
     pb_end(pb);
 }
