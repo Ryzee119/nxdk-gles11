@@ -385,8 +385,8 @@ void combiner_init(void)
         pb,
         NV097_SET_SHADER_OTHER_STAGE_INPUT,
         PB_MASK(NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE1, NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE1_INSTAGE_0) |
-            PB_MASK(NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE2, NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE2_INSTAGE_0) |
-            PB_MASK(NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE3, NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE3_INSTAGE_0));
+            PB_MASK(NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE2, NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE2_INSTAGE_1) |
+            PB_MASK(NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE3, NV097_SET_SHADER_OTHER_STAGE_INPUT_STAGE3_INSTAGE_2));
 
     pb = pb_push1(
         pb,
@@ -484,6 +484,8 @@ static GLenum invert_operand(GLenum op)
 #define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH  NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_PASS_THROUGH
 #define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE    NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_CLIP_PLANE
 #define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_2D_PROJECTIVE NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_2D_PROJECTIVE
+#define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CUBE_MAP      NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_CUBE_MAP
+#define NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_3D_PROJECTIVE NV097_SET_SHADER_STAGE_PROGRAM_STAGE0_3D_PROJECTIVE
 
 void combiner_set_texture_env(void)
 {
@@ -830,14 +832,14 @@ void combiner_set_texture_env(void)
 
             // Enable clip planes on this unit
             shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE;
-            previous_clip_stage = i;
 
-            // Enable texgen for clip planes
+            // Enable texture stage. We have no texture but needs to be enabled for clip plane to process.
             pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (i * 64), NV097_SET_TEXTURE_CONTROL0_ENABLE);
 
             if (!context->transformation_state.clip_plane_dirty && previous_clip_stage == i) {
                 break;
             }
+            previous_clip_stage = i;
             context->transformation_state.clip_plane_dirty = GL_FALSE;
 
             pb = pb_push4(pb,
