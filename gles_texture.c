@@ -996,10 +996,9 @@ void gliTextureFlush(void)
         texture_object_t *texture_object = texture_unit->bound_texture_object;
         xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
-        if (!texture_object->texture_object_dirty) {
+        if (!texture_object->texture_object_dirty && !texture_unit->texture_unit_dirty) {
             continue;
         }
-        texture_object->texture_object_dirty = GL_FALSE;
 
         // If the texture unit is disabled or there is no texture bound, skip
         if (!texture_unit->texture_2d_enabled || !xgu_texture ||
@@ -1046,6 +1045,13 @@ void gliTextureFlush(void)
             pb, i, 0, XGU_TEXTURE_CONVOLUTION_GAUSSIAN, min_filter, mag_filter, false, false, false, false);
         pb = xgu_set_texture_address(pb, i, u, false, v, false, p, false, false);
         pb_end(pb);
+    }
+
+    for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+        texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
+        if (texture_unit->bound_texture_object) {
+            texture_unit->bound_texture_object->texture_object_dirty = GL_FALSE;
+        }
     }
 
     combiner_set_texture_env();
