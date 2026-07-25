@@ -377,7 +377,7 @@ void gliTransformFlush(void)
 
         // Need to do ViewPort * Projection * ModelView for push to composite matrix
         mat4 mvp;
-        glm_mat4_mulN((mat4 *[]){viewport, projection, modelview}, 3, mvp);
+        glm_mat4_mulN((const mat4 *[]){viewport, projection, modelview}, 3, mvp);
 
         uint32_t *pb = pb_begin();
         // pb = pb_push_transposed_matrix(pb, NV097_SET_PROJECTION_MATRIX, (const float *)*projection);

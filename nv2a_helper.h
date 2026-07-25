@@ -1,10 +1,11 @@
 #pragma once
 #include <GLES/gl.h>
-#include <cglm/cglm.h>
 #include <stb_sprintf.h>
 #include <xgu.h>
 #include <xgux.h>
 #include <swizzle.h>
+
+#include "gles_math.h"
 
 #define GLI_MAX_LIGHTS XGU_LIGHT_COUNT
 #define GLI_MAX_TEXTURE_UNITS XGU_TEXTURE_COUNT // This is shared with clip planes (4 per stage) and only one point sprite can be enabled
