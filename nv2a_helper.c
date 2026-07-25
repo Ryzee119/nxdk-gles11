@@ -878,6 +878,10 @@ void combiner_set_texture_env(void)
 
             shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH;
 
+            // Ensure texture control is disabled for this unused stage
+            // (e.g. if it was previously used for clip planes and left enabled)
+            pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (i * 64), 0);
+
             // Color: out.rgb = STAGE_INPUT * 1
             // Alpha: out.a = STAGE_INPUT.a * 1
             // Output to SPARE0
