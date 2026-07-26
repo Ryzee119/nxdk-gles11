@@ -231,7 +231,9 @@ GL_API void GL_APIENTRY glBufferData(GLenum target, GLsizeiptr size, const void 
     }
 
     // We have shared VRAM, don't really need to care about usage hints (GL_STATIC_DRAW / GL_DYNAMIC_DRAW) for now
-    void *gpu_data = MmAllocateContiguousMemoryEx(size, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    // However, since nxdk-gles11 reads index buffers on the CPU during glDrawElements, they MUST be cached.
+    ULONG protect = (target == GL_ELEMENT_ARRAY_BUFFER) ? PAGE_READWRITE : (PAGE_READWRITE | PAGE_WRITECOMBINE);
+    void *gpu_data = MmAllocateContiguousMemoryEx(size, 0, 0xFFFFFFFF, 0x1000, protect);
     if (gpu_data == NULL) {
         gliSetError(GL_OUT_OF_MEMORY);
         return;
