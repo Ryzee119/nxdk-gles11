@@ -270,9 +270,11 @@ GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, 
     const void *indices_ptr = gliGetBufferPointer(context->vertex_array_data.element_array_buffer_binding, indices);
 
     // Scan indices to find vertex range, then stage client arrays
-    GLsizei max_index = gliScanMaxIndex(type, indices_ptr, count);
-    if (!gliStageClientArrays(max_index + 1)) {
-        return;
+    if (gliNeedsStaging()) {
+        GLsizei max_index = gliScanMaxIndex(type, indices_ptr, count);
+        if (!gliStageClientArrays(max_index + 1)) {
+            return;
+        }
     }
 
     gliFlushStateChange();

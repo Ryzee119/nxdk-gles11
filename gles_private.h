@@ -465,6 +465,7 @@ void gliArrayFlush(void);
 void gliStagingInit(void);
 void gliStagingDestroy(void);
 void gliStagingReset(void);
+GLboolean gliNeedsStaging(void);
 GLboolean gliStageClientArrays(GLsizei vertex_count);
 GLsizei gliScanMaxIndex(GLenum type, const void *indices, GLsizei count);
 void gliLightingFlush(void);
