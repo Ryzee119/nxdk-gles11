@@ -33,6 +33,7 @@ int main (int argc, char **argv)
 {
     XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
     glContextInit(640, 480);
+    glSwapInterval(0); // Disable vsync. Default is 1 (Waits 1 vsync)
 
     // nxdk-gles11 automatically stages client-side arrays (like stack/malloc memory) 
     // into GPU-accessible memory, so you can pass them directly to gl*Pointer.
