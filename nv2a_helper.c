@@ -1,13 +1,22 @@
 #include "gles_private.h"
+static int gl_swap_interval = 1;
+
+void glSwapInterval(int interval)
+{
+    gl_swap_interval = interval;
+}
 
 void glFlipNV2A()
 {
     gli_context_t *context = gliGetContext();
 
-    pb_wait_for_vbl();
-
-    while (pb_busy()) {
-        NtYieldExecution();
+    if (gl_swap_interval > 0) {
+        for (int i = 0; i < gl_swap_interval; i++) {
+            pb_wait_for_vbl();
+        }
+        while (pb_busy()) {
+            NtYieldExecution();
+        }
     }
 
     while (pb_finished()) {

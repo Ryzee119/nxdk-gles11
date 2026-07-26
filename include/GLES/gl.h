@@ -566,6 +566,7 @@ GL_API void GL_APIENTRY glPointSizePointerOES (GLenum type, GLsizei stride, cons
 
 void glContextInit(GLint window_width, GLint window_height);
 void glFlipNV2A();
+void glSwapInterval(int interval);
 
 #ifdef __cplusplus
 }
