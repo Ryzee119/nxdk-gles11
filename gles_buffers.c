@@ -246,7 +246,7 @@ GL_API void GL_APIENTRY glBufferData(GLenum target, GLsizeiptr size, const void 
     // If data is NULL, a data store of the specified size is still created, but its contents remain uninitialized and
     // thus undefined.
     if (data) {
-        memcpy(buffer_object->buffer_data, data, size);
+        gli_memcpy(buffer_object->buffer_data, data, size);
     }
 }
 
@@ -276,7 +276,7 @@ GL_API void GL_APIENTRY glBufferSubData(GLenum target, GLintptr offset, GLsizeip
         return;
     }
 
-    memcpy((uint8_t *)buffer_object->buffer_data + offset, data, size);
+    gli_memcpy((uint8_t *)buffer_object->buffer_data + offset, data, size);
 }
 
 GL_API void GL_APIENTRY glGetBufferParameteriv(GLenum target, GLenum pname, GLint *params)

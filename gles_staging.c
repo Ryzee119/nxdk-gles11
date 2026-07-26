@@ -81,7 +81,7 @@ static void *stage_range(
     if (!dst) {
         return NULL;
     }
-    memcpy(dst, src_start, byte_size);
+    gli_memcpy(dst, src_start, byte_size);
 
     // Record this range for interleaving detection
     if (*range_count < MAX_STAGED_RANGES) {

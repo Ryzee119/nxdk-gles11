@@ -1,4 +1,5 @@
 #include "gles_math.h"
+#include "gles_private.h"
 #include <math.h>
 #include <string.h>
 
@@ -48,14 +49,14 @@ void glm_mat4_identity(mat4 mat)
 void glm_mat4_make(const float *src, mat4 dest)
 {
     if (src != (const float *)dest) {
-        memcpy(dest, src, 16 * sizeof(float));
+        gli_memcpy(dest, src, 16 * sizeof(float));
     }
 }
 
 void glm_mat4_copy(const mat4 mat, mat4 dest)
 {
     if (mat != dest) {
-        memcpy(dest, mat, 16 * sizeof(float));
+        gli_memcpy(dest, mat, 16 * sizeof(float));
     }
 }
 
@@ -86,6 +87,45 @@ void glm_mat4_mulN(const mat4 *matrices[], int count, mat4 dest)
 
 void glm_mat4_inv(const mat4 mat, mat4 dest)
 {
+    // Fast path for affine transformations (bottom row is 0 0 0 1)
+    if (mat[0][3] == 0.0f && mat[1][3] == 0.0f && mat[2][3] == 0.0f && mat[3][3] == 1.0f) {
+        float a = mat[0][0], b = mat[0][1], c = mat[0][2], e = mat[1][0], f = mat[1][1], g = mat[1][2], i = mat[2][0],
+              j = mat[2][1], k = mat[2][2], m = mat[3][0], n = mat[3][1], o = mat[3][2];
+
+        float co00 = f * k - g * j;
+        float co10 = g * i - e * k;
+        float co20 = e * j - f * i;
+
+        float det = a * co00 + b * co10 + c * co20;
+        if (fabsf(det) < 1e-6f) {
+            glm_mat4_identity(dest);
+            return;
+        }
+
+        float idt = 1.0f / det;
+
+        dest[0][0] = co00 * idt;
+        dest[0][1] = (c * j - b * k) * idt;
+        dest[0][2] = (b * g - c * f) * idt;
+        dest[0][3] = 0.0f;
+
+        dest[1][0] = co10 * idt;
+        dest[1][1] = (a * k - c * i) * idt;
+        dest[1][2] = (c * e - a * g) * idt;
+        dest[1][3] = 0.0f;
+
+        dest[2][0] = co20 * idt;
+        dest[2][1] = (b * i - a * j) * idt;
+        dest[2][2] = (a * f - b * e) * idt;
+        dest[2][3] = 0.0f;
+
+        dest[3][0] = -(dest[0][0] * m + dest[1][0] * n + dest[2][0] * o);
+        dest[3][1] = -(dest[0][1] * m + dest[1][1] * n + dest[2][1] * o);
+        dest[3][2] = -(dest[0][2] * m + dest[1][2] * n + dest[2][2] * o);
+        dest[3][3] = 1.0f;
+        return;
+    }
+
     float a = mat[0][0], b = mat[0][1], c = mat[0][2], d = mat[0][3], e = mat[1][0], f = mat[1][1], g = mat[1][2],
           h = mat[1][3], i = mat[2][0], j = mat[2][1], k = mat[2][2], l = mat[2][3], m = mat[3][0], n = mat[3][1],
           o = mat[3][2], p = mat[3][3];
