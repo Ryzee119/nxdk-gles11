@@ -7,12 +7,91 @@
 #include <xgu.h>
 #include <xgux.h>
 
+#include <GLES/gl.h>
 #include <assert.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
+
+#include <xmmintrin.h>
+
+static inline void *gli_memcpy(void *dst, const void *src, size_t n)
+{
+    uint8_t *d = (uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    int streamed = 0;
+
+    // Fast path 1: Both Source and Destination are 16-byte aligned
+    if (n >= 16 && ((uintptr_t)d & 15) == 0 && ((uintptr_t)s & 15) == 0) {
+        streamed = 1;
+        size_t n64 = n >> 6;
+        while (n64--) {
+            _mm_prefetch((const char *)(s + 128), _MM_HINT_NTA);
+
+            __m128 x0 = _mm_load_ps((const float *)s);
+            __m128 x1 = _mm_load_ps((const float *)(s + 16));
+            __m128 x2 = _mm_load_ps((const float *)(s + 32));
+            __m128 x3 = _mm_load_ps((const float *)(s + 48));
+
+            // Fills exactly two 32-byte Coppermine WCBs for a clean bus burst
+            _mm_stream_ps((float *)d, x0);
+            _mm_stream_ps((float *)(d + 16), x1);
+            _mm_stream_ps((float *)(d + 32), x2);
+            _mm_stream_ps((float *)(d + 48), x3);
+
+            d += 64;
+            s += 64;
+        }
+        n &= 63;
+
+        size_t n16 = n >> 4;
+        while (n16--) {
+            __m128 x = _mm_load_ps((const float *)s);
+            _mm_stream_ps((float *)d, x);
+            d += 16;
+            s += 16;
+        }
+        n &= 15;
+    }
+    // Fast path 2: Destination is 16-byte aligned
+    else if (n >= 16 && ((uintptr_t)d & 15) == 0) {
+        streamed = 1;
+        size_t n16 = n >> 4;
+        while (n16--) {
+            __m128 x = _mm_loadu_ps((const float *)s);
+            _mm_stream_ps((float *)d, x);
+            d += 16;
+            s += 16;
+        }
+        n &= 15;
+    }
+
+    if (streamed) {
+        _mm_sfence();
+    }
+
+    // Fallback path: 4-byte aligned
+    if (n >= 4 && ((uintptr_t)d & 3) == 0 && ((uintptr_t)s & 3) == 0) {
+        uint32_t *d32 = (uint32_t *)d;
+        const uint32_t *s32 = (const uint32_t *)s;
+        size_t n4 = n >> 2;
+        while (n4--) {
+            *d32++ = *s32++;
+        }
+        d = (uint8_t *)d32;
+        s = (const uint8_t *)s32;
+        n &= 3;
+    }
+
+    // Byte-by-byte tail cleanup
+    while (n > 0) {
+        *d++ = *s++;
+        n--;
+    }
+    return dst;
+}
 
 #include "gles_math.h"
 #include "nv2a_helper.h"

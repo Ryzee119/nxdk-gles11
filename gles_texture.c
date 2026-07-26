@@ -878,7 +878,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                          xgu_texture->bytes_per_pixel);
         } else {
             for (GLuint y = 0; y < (GLuint)height; y++) {
-                memcpy(dst_pixels + y * xgu_texture->pitch, src_pixels + y * src_pitch, width * bytes_per_pixel);
+                gli_memcpy(dst_pixels + y * xgu_texture->pitch, src_pixels + y * src_pitch, width * bytes_per_pixel);
             }
         }
 
