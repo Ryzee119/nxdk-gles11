@@ -230,3 +230,31 @@ GLsizei gliScanMaxIndex(GLenum type, const void *indices, GLsizei count)
 #endif
     return max_idx;
 }
+
+GLboolean gliNeedsStaging(void)
+{
+    gli_context_t *context = gliGetContext();
+    vertex_array_data_t *vad = &context->vertex_array_data;
+
+    if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding == 0 && vad->vertex_array_ptr != NULL) {
+        return GL_TRUE;
+    }
+    if (vad->normal_array_enabled && vad->normal_array_buffer_binding == 0 && vad->normal_array_ptr != NULL) {
+        return GL_TRUE;
+    }
+    if (vad->color_array_enabled && vad->color_array_buffer_binding == 0 && vad->color_array_ptr != NULL) {
+        return GL_TRUE;
+    }
+    if (vad->point_size_array_enabled && vad->point_size_array_buffer_binding == 0 &&
+        vad->point_size_array_ptr != NULL) {
+        return GL_TRUE;
+    }
+    for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+        if (vad->texcoord_array_enabled[i] && vad->texcoord_array_buffer_binding[i] == 0 &&
+            vad->texcoord_array_ptr[i] != NULL) {
+            return GL_TRUE;
+        }
+    }
+
+    return GL_FALSE;
+}
