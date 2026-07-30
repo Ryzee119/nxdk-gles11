@@ -132,7 +132,10 @@ GL_API void GL_APIENTRY glScissor(GLint x, GLint y, GLsizei w, GLsizei h)
     context->pixel_ops_state.scissor_box[2] = w;
     context->pixel_ops_state.scissor_box[3] = h;
 
-    uint32_t *pb = pb_begin();
-    pb = xgu_set_scissor_rect(pb, false, x, y, w, h);
-    pb_end(pb);
+    // Only push if scissor test is enabled
+    if (context->pixel_ops_state.scissor_test_enabled) {
+        uint32_t *pb = pb_begin();
+        pb = xgu_set_scissor_rect(pb, false, x, y, w, h);
+        pb_end(pb);
+    }
 }
