@@ -1,3 +1,4 @@
+#include "arena.h"
 #include "gles_private.h"
 
 // GPU staging arena for client-side vertex arrays.
@@ -39,12 +40,6 @@ void gliStagingDestroy(void)
     }
 }
 
-void gliStagingReset(void)
-{
-    gli_context_t *context = gliGetContext();
-    arena_reset(&context->staging_arena);
-}
-
 // Check if this source range is fully contained within an already-staged range.
 // If so, return the destination pointer adjusted for the offset, otherwise return NULL.
 static void *find_staged_overlap(const staged_range_t *ranges,
@@ -75,8 +70,13 @@ static void *stage_range(
         return existing;
     }
 
-    // Allocate and copy
     uint32_t byte_size = (uint32_t)(src_end - src_start);
+
+    // Round robin if we will go over capacity
+    if (arena_available(arena) < byte_size) {
+        arena_reset(arena);
+    }
+
     void *dst = arena_alloc(arena, byte_size);
     if (!dst) {
         return NULL;
