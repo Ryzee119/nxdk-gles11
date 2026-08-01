@@ -109,7 +109,7 @@ GL_API void GL_APIENTRY glBindBuffer(GLenum target, GLuint buffer)
         return;
     }
 
-    memset(buffer_object, 0, sizeof(buffer_object_t));
+    gli_memset(buffer_object, 0, sizeof(buffer_object_t));
     buffer_object->buffer_name = buffer;
     buffer_object->buffer_size = 0;
     buffer_object->buffer_usage = GL_STATIC_DRAW;

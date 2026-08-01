@@ -1,7 +1,4 @@
-#include "gles_math.h"
 #include "gles_private.h"
-#include <math.h>
-#include <string.h>
 
 const vec4 GLM_VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 const vec4 GLM_VEC4_ONE = {1.0f, 1.0f, 1.0f, 1.0f};

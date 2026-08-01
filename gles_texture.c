@@ -1,4 +1,5 @@
 #include "gles_private.h"
+#include <swizzle.h>
 
 texture_object_t *gliFindTextureObject(GLuint name, texture_object_t **prev)
 {
@@ -109,7 +110,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     // In the initial state, the value assigned to TEXTURE MIN FILTER is NEAREST MIPMAP LINEAR, and
     // the value for TEXTURE MAG FILTER is LINEAR. s and t wrap modes are both set
     // to REPEAT. The value of GENERATE MIPMAP is false
-    memset(texture_object, 0, sizeof(texture_object_t));
+    gli_memset(texture_object, 0, sizeof(texture_object_t));
     texture_object->texture_name = texture;
     texture_object->texture_object_dirty = GL_TRUE;
     texture_object->min_filter = GL_NEAREST_MIPMAP_LINEAR;
@@ -814,7 +815,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         gliSetError(GL_OUT_OF_MEMORY);
         return;
     }
-    memset(xgu_texture, 0, sizeof(xgu_texture_t));
+    gli_memset(xgu_texture, 0, sizeof(xgu_texture_t));
 
     xgu_texture->swizzled = 0;
 
@@ -897,7 +898,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
             GLI_FREE((void *)src_pixels);
         }
     } else {
-        memset(xgu_texture->data, 0, xgu_texture->pitch * xgu_texture->data_height);
+        gli_memset(xgu_texture->data, 0, xgu_texture->pitch * xgu_texture->data_height);
     }
 
     // Bind the texture to the currently bound texture object
