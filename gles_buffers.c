@@ -1,6 +1,6 @@
 #include "gles_private.h"
 
-static buffer_object_t *find_buffer_object(GLuint name, buffer_object_t **prev)
+buffer_object_t *gliFindBufferObject(GLuint name, buffer_object_t **prev)
 {
     gli_context_t *context = gliGetContext();
     buffer_object_t *g_buffers_head = context->buffer_objects;
@@ -36,11 +36,6 @@ static GLuint *get_binding_ptr(GLenum target)
     }
 }
 
-buffer_object_t *gliGetBufferObject(GLuint name)
-{
-    return find_buffer_object(name, NULL);
-}
-
 GLvoid *gliGetBufferPointer(GLuint buffer_binding, const GLvoid *ptr)
 {
     gli_context_t *context = gliGetContext();
@@ -49,7 +44,7 @@ GLvoid *gliGetBufferPointer(GLuint buffer_binding, const GLvoid *ptr)
     // If a buffer is bound with glBindBuffer, ptr is treated as an offset and the bound buffer's data pointer is used
     // instead
     if (buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(buffer_binding, NULL);
         return (GLvoid *)((uintptr_t)buffer->buffer_data + (uintptr_t)ptr);
     } else {
         return (GLvoid *)ptr;
@@ -96,7 +91,7 @@ GL_API void GL_APIENTRY glBindBuffer(GLenum target, GLuint buffer)
     // FIXME, check for valid buffer name somehow?
 
     // First check if the buffer object already exists, if so just bind it
-    buffer_object_t *buffer_object = find_buffer_object(buffer, NULL);
+    buffer_object_t *buffer_object = gliFindBufferObject(buffer, NULL);
     if (buffer_object != NULL) {
         *binding = buffer;
         return;
@@ -131,7 +126,7 @@ GL_API void GL_APIENTRY glDeleteBuffers(GLsizei n, const GLuint *buffers)
     for (GLsizei i = 0; i < n; i++) {
         GLuint name = buffers[i];
         buffer_object_t *prev = NULL; // Track previous for linked list removal
-        buffer_object_t *buf = find_buffer_object(name, &prev);
+        buffer_object_t *buf = gliFindBufferObject(name, &prev);
         if (buf) {
             // Remove from the context's list
             if (prev) {
@@ -201,7 +196,7 @@ GL_API void GL_APIENTRY glBufferData(GLenum target, GLsizeiptr size, const void 
         return;
     }
 
-    buffer_object_t *buffer_object = find_buffer_object(*binding, NULL);
+    buffer_object_t *buffer_object = gliFindBufferObject(*binding, NULL);
     if (buffer_object == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -264,7 +259,7 @@ GL_API void GL_APIENTRY glBufferSubData(GLenum target, GLintptr offset, GLsizeip
         return;
     }
 
-    buffer_object_t *buffer_object = find_buffer_object(*binding, NULL);
+    buffer_object_t *buffer_object = gliFindBufferObject(*binding, NULL);
     if (buffer_object == NULL || buffer_object->buffer_data == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -294,7 +289,7 @@ GL_API void GL_APIENTRY glGetBufferParameteriv(GLenum target, GLenum pname, GLin
         return;
     }
 
-    buffer_object_t *buffer_object = find_buffer_object(*binding, NULL);
+    buffer_object_t *buffer_object = gliFindBufferObject(*binding, NULL);
     if (buffer_object == NULL) {
         gliSetError(GL_INVALID_OPERATION);
         return;
@@ -316,7 +311,7 @@ GL_API void GL_APIENTRY glGetBufferParameteriv(GLenum target, GLenum pname, GLin
 GL_API GLboolean GL_APIENTRY glIsBuffer(GLuint buffer)
 {
     gli_context_t *context = gliGetContext();
-    buffer_object_t *buffer_object = find_buffer_object(buffer, NULL);
+    buffer_object_t *buffer_object = gliFindBufferObject(buffer, NULL);
     if (buffer == 0 || buffer_object == NULL) {
         return GL_FALSE;
     }
