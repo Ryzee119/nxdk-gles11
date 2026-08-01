@@ -1,7 +1,5 @@
 #pragma once
 #include <GLES/gl.h>
-#include <stb_sprintf.h>
-#include <swizzle.h>
 #include <xgu.h>
 #include <xgux.h>
 

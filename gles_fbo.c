@@ -1,4 +1,5 @@
 #include "gles_private.h"
+#include <swizzle.h>
 
 static XguTexFormatColor unswizzle_texture_format(XguTexFormatColor format)
 {
@@ -127,7 +128,7 @@ GL_API void GL_APIENTRY glBindFramebufferOES(GLenum target, GLuint framebuffer)
 
     // The state of a framebuffer object immediately after it is first bound is three attachment points
     // (GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, and GL_STENCIL_ATTACHMENT) each with GL_NONE as the object type.
-    memset(fbo, 0, sizeof(framebuffer_object_t));
+    gli_memset(fbo, 0, sizeof(framebuffer_object_t));
     fbo->color.type = GL_NONE_OES;
     fbo->depth.type = GL_NONE_OES;
     fbo->stencil.type = GL_NONE_OES;
@@ -246,7 +247,7 @@ GL_API void GL_APIENTRY glBindRenderbufferOES(GLenum target, GLuint renderbuffer
 
     // The state of a framebuffer object immediately after it is first bound is three attachment points
     // (GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, and GL_STENCIL_ATTACHMENT) each with GL_NONE as the object type.
-    memset(rbo, 0, sizeof(renderbuffer_object_t));
+    gli_memset(rbo, 0, sizeof(renderbuffer_object_t));
     rbo->name = renderbuffer;
 
     // Bind the fbo to the context
@@ -373,7 +374,8 @@ GL_API void GL_APIENTRY glRenderbufferStorageOES(GLenum target, GLenum internalf
         gliSetError(GL_OUT_OF_MEMORY);
         return;
     }
-    memset(rbo->data, 0, size);
+    rbo->data_physical_address = (void *)MmGetPhysicalAddress(rbo->data);
+    gli_memset(rbo->data, 0, size);
     rbo->data_physical_address = (GLubyte *)MmGetPhysicalAddress(rbo->data);
     rbo->width = width;
     rbo->height = height;
