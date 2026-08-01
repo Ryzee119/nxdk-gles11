@@ -192,7 +192,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     return GL_TRUE;
 
 out_of_memory:
-    GLI_DEBUG_PRINT("[gles] staging arena overflow (%u bytes). Increase GLI_STAGING_ARENA_SIZE.\n",
+    gliDebugF("[gles] staging arena overflow (%u bytes). Increase GLI_STAGING_ARENA_SIZE.\n",
                     (unsigned)GLI_STAGING_ARENA_SIZE);
     gliSetError(GL_OUT_OF_MEMORY);
     return GL_FALSE;
