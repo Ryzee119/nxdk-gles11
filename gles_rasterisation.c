@@ -29,6 +29,13 @@ GL_API void GL_APIENTRY glFrontFace(GLenum mode)
 
     context->rasterization_state.cull_front_face = mode;
 
+    // When rendering to an FBO, we don't invert the Y-axis.
+    // But the hardware expects front face inversion because it assumes a Y-inverted main screen.
+    // We must manually invert the front face to compensate for the un-inverted FBO Y-axis.
+    if (context->fbo_binding != 0) {
+        xgu_mode = (xgu_mode == XGU_FRONT_CCW) ? XGU_FRONT_CW : XGU_FRONT_CCW;
+    }
+
     uint32_t *pb = pb_begin();
     pb = xgu_set_front_face(pb, xgu_mode);
     pb_end(pb);

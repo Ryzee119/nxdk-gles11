@@ -282,6 +282,24 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             // glStencilOp.
             context->pixel_ops_state.stencil_test_enabled = enable;
             pb = xgu_set_stencil_test_enable(pb, enable);
+            if (!enable) {
+                pb = xgu_set_stencil_func(pb, XGU_FUNC_ALWAYS);
+                pb = xgu_set_stencil_func_ref(pb, 0);
+                pb = xgu_set_stencil_func_mask(pb, 0xFF);
+                pb = xgu_set_stencil_op_fail(pb, XGU_STENCIL_OP_KEEP);
+                pb = xgu_set_stencil_op_zfail(pb, XGU_STENCIL_OP_KEEP);
+                pb = xgu_set_stencil_op_zpass(pb, XGU_STENCIL_OP_KEEP);
+                pb = xgu_set_stencil_mask(pb, 0xFF);
+            } else {
+                const pixel_ops_state_t *pos = &context->pixel_ops_state;
+                pb = xgu_set_stencil_func(pb, gliEnumToNvFunc(pos->stencil_func));
+                pb = xgu_set_stencil_func_ref(pb, pos->stencil_ref);
+                pb = xgu_set_stencil_func_mask(pb, pos->stencil_value_mask);
+                pb = xgu_set_stencil_op_fail(pb, gliEnumToNvStencilOp(pos->stencil_fail_op));
+                pb = xgu_set_stencil_op_zfail(pb, gliEnumToNvStencilOp(pos->stencil_zfail_op));
+                pb = xgu_set_stencil_op_zpass(pb, gliEnumToNvStencilOp(pos->stencil_zpass_op));
+                pb = xgu_set_stencil_mask(pb, context->framebuffer_control.stencil_writemask);
+            }
             break;
         case GL_TEXTURE_2D:
             // If enabled, two-dimensional texturing is performed for the active texture unit. See glActiveTexture,
@@ -419,15 +437,33 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
         nv_clear_mask |= NV097_CLEAR_SURFACE_STENCIL;
     }
 
-    const uint32_t nv_clear_color = FLOAT4_TO_PACKED_ARGB32(context->framebuffer_control.clear_color);
+    if (!nv_clear_mask) {
+        return;
+    }
 
-    DWORD zstencil =
-        (context->framebuffer_control.clear_stencil & 0xFF) |
-        (((GLuint)(context->framebuffer_control.clear_depth * (GLfloat)GLI_DEPTH_BUFFER_MAX) << 8) & 0xFFFFFF00);
+    const uint32_t fmt_color = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_COLOR) >> 0;
+    const uint32_t fmt_zeta = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_ZETA) >> 4;
+
+    const DWORD nv_clear_color = gliColor4fToNvColor(fmt_color, context->framebuffer_control.clear_color);
+    const DWORD nv_clear_zstencil = gliDepthStencilToNvZeta(
+        fmt_zeta, context->framebuffer_control.clear_depth, context->framebuffer_control.clear_stencil);
+
+    GLint sx = 0, sy = 0;
+    GLint sw = context->current_surface_width;
+    GLint sh = context->current_surface_height;
+
+    if (context->pixel_ops_state.scissor_test_enabled) {
+        sx = context->pixel_ops_state.scissor_box[0];
+        sy = context->pixel_ops_state.scissor_box[1];
+        sw = context->pixel_ops_state.scissor_box[2];
+        sh = context->pixel_ops_state.scissor_box[3];
+    }
 
     uint32_t *pb = pb_begin();
+    pb = push_command_parameter(pb, NV097_SET_CLEAR_RECT_HORIZONTAL, ((sx + sw - 1) << 16) | sx);
+    pb = push_command_parameter(pb, NV097_SET_CLEAR_RECT_VERTICAL, ((sy + sh - 1) << 16) | sy);
     pb = push_command_parameter(pb, NV097_SET_COLOR_CLEAR_VALUE, nv_clear_color);
-    pb = push_command_parameter(pb, NV097_SET_ZSTENCIL_CLEAR_VALUE, zstencil);
+    pb = push_command_parameter(pb, NV097_SET_ZSTENCIL_CLEAR_VALUE, nv_clear_zstencil);
     pb = push_command_parameter(pb, NV097_CLEAR_SURFACE, nv_clear_mask);
     pb_end(pb);
 }
@@ -974,6 +1010,26 @@ GLuint gliEnumtoByteSize(GLenum type)
             return sizeof(GLfixed);
         case GL_FLOAT:
             return sizeof(GLfloat);
+        default:
+            return 0;
+    }
+}
+
+GLuint gliFormatToBpp(GLenum format)
+{
+    switch (format) {
+        case GL_RGBA8_OES:
+        case GL_RGB8_OES:
+        case GL_DEPTH_COMPONENT24_OES:
+        case GL_DEPTH24_STENCIL8_OES:
+            return 4;
+        case GL_RGB565_OES:
+        case GL_RGB5_A1_OES:
+        case GL_RGBA4_OES:
+        case GL_DEPTH_COMPONENT16_OES:
+            return 2;
+        case GL_STENCIL_INDEX8_OES:
+            return 1;
         default:
             return 0;
     }
