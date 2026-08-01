@@ -601,14 +601,14 @@ void combiner_set_texture_env(void)
         if (is_point_sprite) {
              // Point sprites must be on stage 3. Let's just warn about it for now.
             if (i != 3) {
-                GLI_DEBUG_PRINT("Point sprite texture unit %u must be on texture unit 3\n", i);
+                gliDebugF("Point sprite texture unit %u must be on texture unit 3\n", i);
             }
 
             // Point sprites must be NPOT and swizzled too
             if (texture_unit->bound_texture_object) {
                 const xgu_texture_t *xgu_texture = texture_unit->bound_texture_object->texture_2d;
                 if (!xgu_texture->swizzled) {
-                    GLI_DEBUG_PRINT("Point sprite texture unit %u must be POT and swizzled\n", i);
+                    gliDebugF("Point sprite texture unit %u must be POT and swizzled\n", i);
                 }
             }
         }
