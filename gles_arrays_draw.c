@@ -63,7 +63,7 @@ GL_API void GL_APIENTRY glVertexPointer(GLint size, GLenum type, GLsizei stride,
     }
 
     if (vad->array_buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
         assert(buffer != NULL);
         vad->vertex_array_buffer_binding = vad->array_buffer_binding;
     } else {
@@ -94,7 +94,7 @@ GL_API void GL_APIENTRY glNormalPointer(GLenum type, GLsizei stride, const void 
     // If a buffer is bound with glBindBuffer, ptr is treated as an offset and the bound buffer's data pointer is used
     // instead
     if (vad->array_buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
         assert(buffer != NULL);
         vad->normal_array_buffer_binding = vad->array_buffer_binding;
     } else {
@@ -128,7 +128,7 @@ GL_API void GL_APIENTRY glColorPointer(GLint size, GLenum type, GLsizei stride, 
     // If a buffer is bound with glBindBuffer, ptr is treated as an offset and the bound buffer's data pointer is used
     // instead
     if (vad->array_buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
         assert(buffer != NULL);
         vad->color_array_buffer_binding = vad->array_buffer_binding;
     } else {
@@ -164,7 +164,7 @@ GL_API void GL_APIENTRY glTexCoordPointer(GLint size, GLenum type, GLsizei strid
     // If a buffer is bound with glBindBuffer, ptr is treated as an offset and the bound buffer's data pointer is used
     // instead
     if (vad->array_buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
         if (buffer == NULL) {
             gliSetError(GL_INVALID_OPERATION);
             return;
@@ -198,7 +198,7 @@ GL_API void GL_APIENTRY glPointSizePointerOES(GLenum type, GLsizei stride, const
     // If a buffer is bound with glBindBuffer, ptr is treated as an offset and the bound buffer's data pointer is used
     // instead
     if (vad->array_buffer_binding != 0) {
-        buffer_object_t *buffer = gliGetBufferObject(vad->array_buffer_binding);
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
         if (buffer == NULL) {
             gliSetError(GL_INVALID_OPERATION);
             return;
