@@ -1,6 +1,6 @@
 #include "gles_private.h"
 
-static texture_object_t *find_texture_object(GLuint name, texture_object_t **prev)
+texture_object_t *gliFindTextureObject(GLuint name, texture_object_t **prev)
 {
     gli_context_t *context = gliGetContext();
     texture_object_t *g_textures_head = context->texture_environment.texture_objects;
@@ -89,7 +89,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     }
 
     // First check if the object already exists, if so just bind it to the texture_unit and we are done
-    texture_object_t *texture_object = find_texture_object(texture, NULL);
+    texture_object_t *texture_object = gliFindTextureObject(texture, NULL);
     if (texture_object != NULL) {
         texture_unit->texture_binding_2d = texture;
         texture_unit->bound_texture_object = texture_object;
@@ -144,7 +144,7 @@ GL_API void GL_APIENTRY glDeleteTextures(GLsizei n, const GLuint *textures)
     for (GLint i = 0; i < n; i++) {
         GLuint name = textures[i];
         texture_object_t *prev = NULL; // Track previous for linked list removal
-        texture_object_t *texture_object = find_texture_object(name, &prev);
+        texture_object_t *texture_object = gliFindTextureObject(name, &prev);
         if (texture_object) {
             // Remove from the context's list
             if (prev) {
@@ -163,6 +163,15 @@ GL_API void GL_APIENTRY glDeleteTextures(GLsizei n, const GLuint *textures)
                 }
             }
 
+            // If a texture is deleted while attached to a framebuffer, it must be detached
+            for (framebuffer_object_t *it = context->framebuffer_objects; it != NULL; it = it->next) {
+                if (it->color.type == GL_TEXTURE_2D && it->color.name == name) {
+                    it->color.type = GL_NONE_OES;
+                    it->color.name = 0;
+                    it->color.texture = NULL;
+                }
+            }
+
             xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
             if (xgu_texture) {
                 if (xgu_texture->data) {
@@ -178,7 +187,7 @@ GL_API void GL_APIENTRY glDeleteTextures(GLsizei n, const GLuint *textures)
 GL_API GLboolean GL_APIENTRY glIsTexture(GLuint texture)
 {
     gli_context_t *context = gliGetContext();
-    texture_object_t *texture_object = find_texture_object(texture, NULL);
+    texture_object_t *texture_object = gliFindTextureObject(texture, NULL);
     if (texture == 0 || texture_object == NULL) {
         return GL_FALSE;
     }
@@ -732,19 +741,15 @@ GL_API void GL_APIENTRY glGetTexEnvxv(GLenum target, GLenum pname, GLfixed *para
     *params = gliFloattoFixed(paramf);
 }
 
-static inline void rgb_to_rgba_opaque(const uint8_t *restrict src, uint8_t *restrict dst, size_t pixel_count)
+static inline void convert_to_bgra(const uint8_t *restrict src, uint8_t *restrict dst, size_t pixel_count, int src_bpp)
 {
     for (size_t i = 0; i < pixel_count; ++i) {
-        uint8_t r = src[0];
-        uint8_t g = src[1];
-        uint8_t b = src[2];
+        dst[0] = src[2];                         // B
+        dst[1] = src[1];                         // G
+        dst[2] = src[0];                         // R
+        dst[3] = (src_bpp == 4) ? src[3] : 0xFF; // A
 
-        dst[0] = r;
-        dst[1] = g;
-        dst[2] = b;
-        dst[3] = 0xFF;
-
-        src += 3;
+        src += src_bpp;
         dst += 4;
     }
 }
@@ -842,7 +847,13 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     // Width must be atleast 8 pixels
     xgu_texture->data_width = GLI_MAX(8, xgu_texture->data_width);
     xgu_texture->data_height = GLI_MAX(8, xgu_texture->data_height);
-    xgu_texture->pitch = xgu_texture->data_width * bytes_per_pixel;
+
+    if (xgu_texture->swizzled) {
+        xgu_texture->pitch = xgu_texture->data_width * bytes_per_pixel;
+    } else {
+        // NV2A hardware requires pitched surfaces (like FBO attachments) to be 64-byte aligned
+        xgu_texture->pitch = (xgu_texture->data_width * bytes_per_pixel + 63) & ~63;
+    }
 
     xgu_texture->format = xgu_format;
     xgu_texture->data = MmAllocateContiguousMemoryEx(
@@ -863,9 +874,9 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         const GLubyte *src_pixels = (GLubyte *)pixels;
         GLubyte *dst_pixels = xgu_texture->data;
 
-        if (format == GL_RGB && type == GL_UNSIGNED_BYTE) {
+        if (type == GL_UNSIGNED_BYTE && (format == GL_RGB || format == GL_RGBA)) {
             GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
-            rgb_to_rgba_opaque(src_pixels, converted_pixels, width * height);
+            convert_to_bgra(src_pixels, converted_pixels, width * height, (format == GL_RGBA) ? 4 : 3);
             src_pixels = converted_pixels;
         }
 
@@ -885,6 +896,8 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         if (src_pixels != (GLubyte *)pixels) {
             GLI_FREE((void *)src_pixels);
         }
+    } else {
+        memset(xgu_texture->data, 0, xgu_texture->pitch * xgu_texture->data_height);
     }
 
     // Bind the texture to the currently bound texture object
@@ -892,6 +905,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
     texture_object_t *texture_object = texture_unit->bound_texture_object;
     texture_object->texture_2d = xgu_texture;
+    texture_object->internalformat = internalformat;
     texture_object->texture_object_dirty = GL_TRUE;
 }
 

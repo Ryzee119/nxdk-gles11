@@ -504,6 +504,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             // FIXME. GL_UNSIGNED_BYTE
             assert(0);
             return NULL;
+        case GL_FRAMEBUFFER_BINDING_OES:
+            *element_type = GLI_INT;
+            *element_count = 1;
+            return &context->fbo_binding;
+        case GL_RENDERBUFFER_BINDING_OES:
+            *element_type = GLI_INT;
+            *element_count = 1;
+            return &context->rbo_binding;
         case GL_LIGHT_MODEL_AMBIENT:
             // params returns four values: the red, green, blue, and alpha components of the ambient intensity of the
             // entire scene. See glLightModel.

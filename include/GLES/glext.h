@@ -40,25 +40,25 @@ extern "C" {
 #define GL_OES_byte_coordinates 0
 #define GL_OES_compressed_ETC1_RGB8_sub_texture 0
 #define GL_OES_compressed_ETC1_RGB8_texture 0
-#define GL_OES_depth24 0
+// #define GL_OES_depth24 0
 #define GL_OES_depth32 0
 #define GL_OES_draw_texture 0
 //#define GL_OES_element_index_uint 0
 #define GL_OES_extended_matrix_palette 0
 #define GL_OES_fbo_render_mipmap 0
 #define GL_OES_fixed_point 0
-#define GL_OES_framebuffer_object 0 //Render targets?
+// #define GL_OES_framebuffer_object 0
 #define GL_OES_mapbuffer 0
 #define GL_OES_matrix_get 0
 #define GL_OES_matrix_palette 0
-#define GL_OES_packed_depth_stencil 0
+// #define GL_OES_packed_depth_stencil 0
 #define GL_OES_query_matrix 0
-#define GL_OES_required_internalformat 0
-#define GL_OES_rgb8_rgba8 0
+// #define GL_OES_required_internalformat 0
+// #define GL_OES_rgb8_rgba8 0
 #define GL_OES_single_precision 0
 #define GL_OES_stencil1 0
 #define GL_OES_stencil4 0
-#define GL_OES_stencil8 0
+// #define GL_OES_stencil8 0
 #define GL_OES_stencil_wrap 0
 #define GL_OES_surfaceless_context 0
 #define GL_OES_texture_cube_map 0

@@ -399,6 +399,7 @@ typedef struct texture_object
     GLenum mag_filter;
     GLenum wrap_s;
     GLenum wrap_t;
+    GLenum internalformat;
 
     GLboolean generate_mipmap;
     struct texture_object *next;
@@ -514,6 +515,36 @@ typedef struct
     GLint num_compressed_texture_formats;
 } implementation_limits_t;
 
+typedef struct renderbuffer_object
+{
+    GLuint name;
+    GLenum internalformat;
+    GLsizei width;
+    GLsizei height;
+    GLboolean swizzled;
+    GLubyte *data;
+    GLubyte *data_physical_address;
+    struct renderbuffer_object *next;
+} renderbuffer_object_t;
+
+typedef struct
+{
+    GLenum type; // GL_TEXTURE_2D, GL_RENDERBUFFER_OES, GL_NONE_OES
+    GLuint name;
+    GLint level;
+    texture_object_t *texture;
+    renderbuffer_object_t *renderbuffer;
+} framebuffer_attachment_t;
+
+typedef struct framebuffer_object
+{
+    GLuint name;
+    framebuffer_attachment_t color;
+    framebuffer_attachment_t depth;
+    framebuffer_attachment_t stencil;
+    struct framebuffer_object *next;
+} framebuffer_object_t;
+
 typedef struct
 {
     current_values_t current_values;
@@ -535,9 +566,31 @@ typedef struct
     // GPU staging arena for client-side vertex arrays
     arena_t staging_arena;
     void *staging_arena_pool; // MmAllocateContiguousMemoryEx backing memory
+
+    // OES_framebuffer_object state
+    GLuint fbo_binding;
+    GLuint rbo_binding;
+    framebuffer_object_t *framebuffer_objects;
+    renderbuffer_object_t *renderbuffer_objects;
+
+    // DMA contexts for custom framebuffers
+    GLboolean fbo_state_dirty;
+    GLboolean fbo_dma_initialized;
+    struct s_CtxDma fbo_dma_color;
+    struct s_CtxDma fbo_dma_zeta;
+
+    // Track surface format for clears
+    uint32_t current_surface_format;
+    uint32_t current_surface_width;
+    uint32_t current_surface_height;
 } gli_context_t;
 
+void gliFBOFlush(void);
+
 void gliFlushStateChange(void);
+texture_object_t *gliFindTextureObject(GLuint name, texture_object_t **prev);
+framebuffer_object_t *gliFindFramebufferObject(GLuint name, framebuffer_object_t **prev);
+renderbuffer_object_t *gliFindRenderbufferObject(GLuint name, renderbuffer_object_t **prev);
 int gliDebugF(const char *fmt, ...);
 void gliSetError(GLenum error);
 void gliArrayFlush(void);
@@ -554,7 +607,7 @@ void gliPointParamsFlush(void);
 buffer_object_t *gliGetBufferObject(GLuint name);
 GLvoid *gliGetBufferPointer(GLuint buffer_binding, const GLvoid *ptr);
 gli_context_t *gliGetContext(void);
-
+GLuint gliFormatToBpp(GLenum format);
 GLuint gliEnumtoByteSize(GLenum type);
 
 static inline GLfloat gliFixedtoFloat(GLfixed x)

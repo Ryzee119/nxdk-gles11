@@ -14,7 +14,7 @@
 #define GLI_MAX_TEXTURE_SIZE  4096
 #define GLI_VENDOR_STRING     "nxdk GLES Renderer"
 #define GLI_RENDERER_STRING   "nv2a-based GPU"
-#define GLI_EXTENSIONS_STRING "GL_OES_element_index_uint GL_OES_point_size_array"
+#define GLI_EXTENSIONS_STRING "GL_OES_element_index_uint GL_OES_point_size_array GL_OES_framebuffer_object GL_OES_packed_depth_stencil"
 
 // For line and point sizes xbox takes a 6.3 fix point, total of 9 bits. Max = 0x1FF / 2^3 = 63.875f
 #define GLI_MAX_ALIASED_POINT_SIZE ((float)0x1FF / (float)(1 << 3))
@@ -61,9 +61,12 @@ XguFrontFace gliEnumToNvFrontFace(GLenum mode);
 XguStencilOp gliEnumToNvStencilOp(GLenum op);
 XguShadeModel gliEnumToNvShadeModel(GLenum code);
 XguFogMode gliEnumToNvFogMode(GLenum mode);
+uint32_t gliFormatToNvSurfaceFormat(GLenum format);
 XguTextureAddress gliEnumToNvAddressMode(GLenum wrap);
 XguTexFilter gliEnumToNvTexFilter(GLenum filter);
 XguTexFormatColor gliEnumToNvTexFormat(GLenum format, GLenum type, GLuint *bytes_per_pixel, GLboolean swizzled);
+DWORD gliColor4fToNvColor(uint32_t fmt_color, const GLfloat color[4]);
+DWORD gliDepthStencilToNvZeta(uint32_t fmt_zeta, GLfloat depth, uint32_t stencil);
 
 #define FLOAT4_TO_PACKED_ARGB32(f)                                                                                     \
     ((((GLubyte)((f)[3] * 255.0f) & 0xFF) << 24) | (((GLubyte)((f)[0] * 255.0f) & 0xFF) << 16) |                       \

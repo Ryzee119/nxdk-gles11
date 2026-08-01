@@ -241,6 +241,22 @@ XguFogMode gliEnumToNvFogMode(GLenum mode)
     }
 }
 
+uint32_t gliFormatToNvSurfaceFormat(GLenum format)
+{
+    switch (format) {
+        case GL_RGB565_OES:
+            return NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5;
+        case GL_RGB5_A1_OES:
+        case GL_RGBA4_OES:
+            return NV097_SET_SURFACE_FORMAT_COLOR_LE_X1R5G5B5_O1R5G5B5;
+        case GL_RGB8_OES:
+            return NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_Z8R8G8B8;
+        case GL_RGBA8_OES:
+        default:
+            return NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8;
+    }
+}
+
 XguTextureAddress gliEnumToNvAddressMode(GLenum wrap)
 {
     switch (wrap) {
@@ -289,7 +305,7 @@ XguTexFormatColor gliEnumToNvTexFormat(GLenum format, GLenum type, GLuint *bytes
             case GL_RGB:
             case GL_RGBA:
                 *bytes_per_pixel = 4;
-                return (swizzled) ? XGU_TEXTURE_FORMAT_A8B8G8R8_SWIZZLED : XGU_TEXTURE_FORMAT_A8B8G8R8;
+                return (swizzled) ? XGU_TEXTURE_FORMAT_A8R8G8B8_SWIZZLED : XGU_TEXTURE_FORMAT_A8R8G8B8;
             default:
                 break;
         }
@@ -305,6 +321,60 @@ XguTexFormatColor gliEnumToNvTexFormat(GLenum format, GLenum type, GLuint *bytes
     }
 
     return (XguTexFormatColor)-1;
+}
+
+DWORD gliColor4fToNvColor(uint32_t fmt_color, const GLfloat color[4])
+{
+    switch (fmt_color) {
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X1R5G5B5_Z1R5G5B5:
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X1R5G5B5_O1R5G5B5:
+            return (((uint32_t)(color[3] * 1.0f) & 0x1) << 15) | (((uint32_t)(color[0] * 31.0f) & 0x1F) << 10) |
+                   (((uint32_t)(color[1] * 31.0f) & 0x1F) << 5) | (((uint32_t)(color[2] * 31.0f) & 0x1F) << 0);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5:
+            return (((uint32_t)(color[0] * 31.0f) & 0x1F) << 11) | (((uint32_t)(color[1] * 63.0f) & 0x3F) << 5) |
+                   (((uint32_t)(color[2] * 31.0f) & 0x1F) << 0);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_Z8R8G8B8:
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_O8R8G8B8:
+            return (0xFF << 24) | (((uint32_t)(color[0] * 255.0f) & 0xFF) << 16) |
+                   (((uint32_t)(color[1] * 255.0f) & 0xFF) << 8) | (((uint32_t)(color[2] * 255.0f) & 0xFF) << 0);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X1A7R8G8B8_Z1A7R8G8B8:
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X1A7R8G8B8_O1A7R8G8B8:
+            return (((uint32_t)(color[3] * 127.0f) & 0x7F) << 24) | (((uint32_t)(color[0] * 255.0f) & 0xFF) << 16) |
+                   (((uint32_t)(color[1] * 255.0f) & 0xFF) << 8) | (((uint32_t)(color[2] * 255.0f) & 0xFF) << 0);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8:
+            return (((uint32_t)(color[3] * 255.0f) & 0xFF) << 24) | (((uint32_t)(color[0] * 255.0f) & 0xFF) << 16) |
+                   (((uint32_t)(color[1] * 255.0f) & 0xFF) << 8) | (((uint32_t)(color[2] * 255.0f) & 0xFF) << 0);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_B8:
+            return ((uint32_t)(color[2] * 255.0f) & 0xFF);
+
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_G8B8:
+            return (((uint32_t)(color[1] * 255.0f) & 0xFF) << 8) | (((uint32_t)(color[2] * 255.0f) & 0xFF) << 0);
+
+        default:
+            // Fallback for unhandled / unknown formats (defaults to ARGB32)
+            return (((uint32_t)(color[3] * 255.0f) & 0xFF) << 24) | (((uint32_t)(color[0] * 255.0f) & 0xFF) << 16) |
+                   (((uint32_t)(color[1] * 255.0f) & 0xFF) << 8) | (((uint32_t)(color[2] * 255.0f) & 0xFF) << 0);
+    }
+}
+
+DWORD gliDepthStencilToNvZeta(uint32_t fmt_zeta, GLfloat depth, uint32_t stencil)
+{
+    switch (fmt_zeta) {
+        case NV097_SET_SURFACE_FORMAT_ZETA_Z16:
+            return ((uint32_t)(depth * 65535.0f) & 0xFFFF);
+
+        case NV097_SET_SURFACE_FORMAT_ZETA_Z24S8:
+            return ((((uint32_t)(depth * (GLfloat)GLI_DEPTH_BUFFER_MAX)) << 8) | (stencil & 0xFF));
+
+        default:
+            // Fallback for unknown formats (defaults to Z24S8)
+            return ((((uint32_t)(depth * (GLfloat)GLI_DEPTH_BUFFER_MAX)) << 8) | (stencil & 0xFF));
+    }
 }
 
 #define REG_ZERO      0x0
