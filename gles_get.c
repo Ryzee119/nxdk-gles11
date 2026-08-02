@@ -842,15 +842,16 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_BOOLEAN;
             *element_count = 1;
             return &context->multisampling_state.sample_alpha_to_one_enabled;
-        case GL_SAMPLE_BUFFERS:
+        case GL_SAMPLE_BUFFERS: {
             // params returns a single integer value indicating the number of sample buffers associated with the
             // currently bound framebuffer. See glSampleCoverage.
             // 0 — no multisample buffer (no MSAA).
             // 1 — one multisample buffer (the common case when MSAA is enabled).
             *element_type = GLI_INT;
             *element_count = 1;
-            assert(0);
-            return NULL; // FIXME
+            static GLint sample_buffers = 0;
+            return &sample_buffers;
+        }
         case GL_SAMPLE_COVERAGE:
             // params returns a single boolean value indicating if the fragment coverage value should be ANDed with a
             // temporary coverage value based on the current sample coverage value. The initial value is GL_FALSE. See
@@ -870,14 +871,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_FLOAT;
             *element_count = 1;
             return &context->multisampling_state.sample_coverage_value;
-        case GL_SAMPLES:
+        case GL_SAMPLES: {
             // params returns a single integer value indicating the coverage mask size of the currently bound
             // framebuffer. See glSampleCoverage.
             *element_type = GLI_INT;
             *element_count = 1;
-            assert(0);
-            return NULL; // FIXME what is this value?
-            break;
+            static GLint samples = 0;
+            return &samples;
+        }
         case GL_SCISSOR_BOX:
             // params returns four values: the x and y window coordinates of the scissor box, followed by its width and
             // height. See glScissor.
