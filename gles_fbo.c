@@ -723,11 +723,6 @@ void gliFBOFlush(void)
 
     // When leaving an FBO back to the default buffer, restore pbkit state cleanly
     if (context->fbo_binding == 0) {
-
-        // Invalidate pbkit's depth tracking
-        extern int pb_DepthStencilLast;
-        pb_DepthStencilLast = -2;
-
         pb_target_back_buffer();
         context->current_surface_format =
             XGU_MASK(NV097_SET_SURFACE_FORMAT_COLOR, NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8) |
@@ -824,15 +819,34 @@ void gliFBOFlush(void)
         XGU_MASK(NV097_SET_SURFACE_FORMAT_TYPE, fmt_type) | XGU_MASK(NV097_SET_SURFACE_FORMAT_WIDTH, log2_width) |
         XGU_MASK(NV097_SET_SURFACE_FORMAT_HEIGHT, log2_height);
 
-    extern DWORD pb_DSAddr;
-    extern struct s_CtxDma sDmaObject9;
-    extern struct s_CtxDma sDmaObject10;
-    pb_set_dma_address(&sDmaObject9, (color_data) ? color_data : pb_back_buffer(), 0xFFFFFFFF);
-    pb_set_dma_address(&sDmaObject10, (depth_data) ? depth_data : (void *)pb_DSAddr, 0xFFFFFFFF);
+    static struct s_CtxDma dma_color;
+    static struct s_CtxDma dma_depth;
+    static bool dma_init = false;
+    if (!dma_init) {
+        pb_create_dma_ctx(20, DMA_CLASS_3D, 0, MAXRAM, &dma_color);
+        pb_create_dma_ctx(21, DMA_CLASS_3D, 0, MAXRAM, &dma_depth);
+        pb_bind_channel(&dma_color);
+        pb_bind_channel(&dma_depth);
+        dma_init = true;
+    }
+
+    uint32_t ctx_color = 9; // DMA_CHANNEL_PIXEL_RENDERER
+    if (color_data) {
+        pb_set_dma_address(&dma_color, color_data, 0xFFFFFFFF);
+        ctx_color = 20;
+    }
+
+    uint32_t ctx_zeta = 10; // DMA_CHANNEL_DEPTH_STENCIL_RENDERER
+    if (depth_data) {
+        pb_set_dma_address(&dma_depth, depth_data, 0xFFFFFFFF);
+        ctx_zeta = 21;
+    }
 
     uint32_t *p;
     p = pb_begin();
     p = pb_push1(p, NV097_WAIT_FOR_IDLE, 0);
+    p = pb_push1(p, NV097_SET_CONTEXT_DMA_COLOR, ctx_color);
+    p = pb_push1(p, NV097_SET_CONTEXT_DMA_ZETA, ctx_zeta);
     p = pb_push1(p,
                  NV097_SET_SURFACE_PITCH,
                  XGU_MASK(NV097_SET_SURFACE_PITCH_COLOR, pitch) | XGU_MASK(NV097_SET_SURFACE_PITCH_ZETA, zpitch));
@@ -847,8 +861,10 @@ void gliFBOFlush(void)
                  XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_HEIGHT, clip_height) |
                      XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_Y, 0));
     p = pb_push1(p, NV097_SET_SURFACE_FORMAT, format);
-
-    p = xgu_set_front_face(p, (context->rasterization_state.cull_front_face == GL_CCW) ? XGU_FRONT_CW : XGU_FRONT_CCW);
+    p = pb_push1(p,
+                 NV097_SET_FRONT_FACE,
+                 (context->rasterization_state.cull_front_face == GL_CCW) ? NV097_SET_FRONT_FACE_V_CW
+                                                                          : NV097_SET_FRONT_FACE_V_CCW);
     pb_end(p);
 
     context->current_surface_format = format;
