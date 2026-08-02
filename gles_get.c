@@ -490,20 +490,20 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             //// FIXME. 8 for RGBA8888 etc
             assert(0);
             return NULL;
-        case GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES:
+        case GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES: {
             // params returns one value, the preferred format for pixel read back. See glReadPixels.
             *element_type = GLI_INT;
             *element_count = 1;
-            // FIXME. Probably use GL_RGBA but add a ifdef
-            assert(0);
-            return NULL;
-        case GL_IMPLEMENTATION_COLOR_READ_TYPE_OES:
+            static GLint read_format = GL_RGBA;
+            return &read_format;
+        }
+        case GL_IMPLEMENTATION_COLOR_READ_TYPE_OES: {
             // params returns one value, the preferred type for pixel read back. See glReadPixels.
             *element_type = GLI_INT;
             *element_count = 1;
-            // FIXME. GL_UNSIGNED_BYTE
-            assert(0);
-            return NULL;
+            static GLint read_type = GL_UNSIGNED_BYTE;
+            return &read_type;
+        }
         case GL_FRAMEBUFFER_BINDING_OES:
             *element_type = GLI_INT;
             *element_count = 1;
