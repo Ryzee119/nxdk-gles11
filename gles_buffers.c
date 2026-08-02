@@ -63,9 +63,13 @@ GL_API void GL_APIENTRY glGenBuffers(GLsizei n, GLuint *buffers)
     }
     static GLuint next = 1;
     for (GLsizei i = 0; i < n; i++) {
-        // Surely we will never wrap around, but skip zero if we so
-        // Fixme, wrap around could cause duplicate names
-        if (next == 0) {
+        while (1) {
+            if (next == 0) {
+                next++;
+            }
+            if (gliFindBufferObject(next, NULL) == NULL) {
+                break;
+            }
             next++;
         }
         buffers[i] = next++;

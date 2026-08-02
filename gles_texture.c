@@ -58,9 +58,13 @@ GL_API void GL_APIENTRY glGenTextures(GLsizei n, GLuint *textures)
     }
     static GLuint next = 1;
     for (GLsizei i = 0; i < n; i++) {
-        // Surely we will never wrap around, but skip zero if we so
-        // Fixme, wrap around could cause duplicate names
-        if (next == 0) {
+        while (1) {
+            if (next == 0) {
+                next++;
+            }
+            if (gliFindTextureObject(next, NULL) == NULL) {
+                break;
+            }
             next++;
         }
         textures[i] = next++;
