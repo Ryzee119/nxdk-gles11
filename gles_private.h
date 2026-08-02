@@ -521,6 +521,8 @@ GLuint gliFormatToBpp(GLenum format);
 GLuint gliEnumtoByteSize(GLenum type);
 void *gli_memcpy(void *dst, const void *src, size_t n);
 void *gli_memset(void *dst, int c, size_t n);
+void gliCalcMipmapChain(GLuint width, GLuint height, GLuint bytes_per_pixel, GLuint *out_size, uint8_t *out_levels);
+void gliGenSwizzledMipmaps(xgu_texture_t *xgu_texture);
 
 static inline GLfloat gliFixedtoFloat(GLfixed x)
 {

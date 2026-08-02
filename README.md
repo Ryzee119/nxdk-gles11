@@ -8,6 +8,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Fog
 * [x] Lighting
 * [x] Textures (Including NPOT)
+* [x] Mipmaps
 * [x] Vertex Buffer Objects (VBOs)
 * [x] Frame Buffer Objects (FBOs)
 * [x] Point Sprites
@@ -78,7 +79,6 @@ The NV2A GPU requires vertex data to be in physically contiguous memory to read 
 
 ## Todo
 * [ ] Lots of FIXMEs
-* [ ] Mipmaps
 * [ ] glTexSubImage2D, glCopyTexImage2D, glCopyTexSubImage2D (and compressed?)
 * [ ] Replace swizzle code with something more permissive (MIT etc)
 

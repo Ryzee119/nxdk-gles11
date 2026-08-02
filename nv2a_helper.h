@@ -42,6 +42,8 @@ typedef struct xgu_texture
     XguTextureAddress mode_v;
     GLubyte *data;
     GLubyte *data_physical_address;
+    GLuint data_size;
+    uint8_t mipmap_levels;
     struct xgu_texture *mipmap_head;
 } xgu_texture_t;
 
