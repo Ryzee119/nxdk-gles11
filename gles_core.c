@@ -583,17 +583,17 @@ void glContextInit(GLint window_width, GLint window_height)
     pb_end(pb);
 
     /* --- Table 6.18: Pixel store --- */
-    context->pixel_store.unpack_alignment = GLI_UNPACK_ALIGNMENT;
-    context->pixel_store.pack_alignment = GLI_PACK_ALIGNMENT;
+    glPixelStorei(GL_UNPACK_ALIGNMENT, GLI_UNPACK_ALIGNMENT);
+    glPixelStorei(GL_PACK_ALIGNMENT, GLI_PACK_ALIGNMENT);
 
     /* --- Table 6.19: Hints --- */
-    context->hints_state.perspective_correction_hint = GL_DONT_CARE;
-    context->hints_state.point_smooth_hint = GL_DONT_CARE;
-    context->hints_state.line_smooth_hint = GL_DONT_CARE;
-    context->hints_state.fog_hint = GL_DONT_CARE;
-    context->hints_state.generate_mipmap_hint = GL_DONT_CARE;
+    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_DONT_CARE);
+    glHint(GL_POINT_SMOOTH_HINT, GL_DONT_CARE);
+    glHint(GL_LINE_SMOOTH_HINT, GL_DONT_CARE);
+    glHint(GL_FOG_HINT, GL_DONT_CARE);
+    glHint(GL_GENERATE_MIPMAP_HINT, GL_DONT_CARE);
 
-    /* --- Table 6.20: Implementation limits (seed with spec mins/zeros) --- */
+    /* --- Table 6.20: Implementation limits --- */
     context->implementation_limits.max_lights = GLI_MAX_LIGHTS;
     context->implementation_limits.max_clip_planes = GLI_MAX_CLIP_PLANES;
     context->implementation_limits.max_modelview_stack_depth = GLI_MAX_MODELVIEW_STACK;
@@ -603,108 +603,49 @@ void glContextInit(GLint window_width, GLint window_height)
     context->implementation_limits.max_texture_size = GLI_MAX_TEXTURE_SIZE;
     context->implementation_limits.max_viewport_dims[0] = GLI_MAX_VIEWPORT_WIDTH;
     context->implementation_limits.max_viewport_dims[1] = GLI_MAX_VIEWPORT_HEIGHT;
-
-    /* Point/line width ranges: seed with common safe values */
     context->implementation_limits.aliased_point_size_range[0] = GLI_MIN_ALIASED_POINT_SIZE;
     context->implementation_limits.aliased_point_size_range[1] = GLI_MAX_ALIASED_POINT_SIZE;
     context->implementation_limits.antialiased_point_size_range[0] = GLI_MIN_SMOOTH_POINT_SIZE;
     context->implementation_limits.antialiased_point_size_range[1] = GLI_MAX_SMOOTH_POINT_SIZE;
-
     context->implementation_limits.aliased_line_width_range[0] = GLI_MIN_ALIASED_LINE_WIDTH;
     context->implementation_limits.aliased_line_width_range[1] = GLI_MAX_ALIASED_LINE_WIDTH;
     context->implementation_limits.antialiased_line_width_range[0] = GLI_MIN_SMOOTH_LINE_WIDTH;
     context->implementation_limits.antialiased_line_width_range[1] = GLI_MAX_SMOOTH_LINE_WIDTH;
-
     context->implementation_limits.max_texture_units = GLI_MAX_TEXTURE_UNITS;
-
     context->implementation_limits.sample_buffers = 0;
     context->implementation_limits.samples = 0;
-
     context->implementation_limits.compressed_texture_formats = NULL;
     context->implementation_limits.num_compressed_texture_formats = GLI_NUM_COMPRESSED_TEXTURE_FORMATS;
 
     /* --- Table 6.3: Current values --- */
-    glm_vec4_copy(GLM_VEC4_ONE, context->current_values.current_color);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
     for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
-        glm_vec4_copy(GLM_VEC4_BLACK, context->current_values.current_texcoord[i]);
+        glMultiTexCoord4f(GL_TEXTURE0 + i, 0.0f, 0.0f, 0.0f, 1.0f);
     }
-    glm_vec3_copy(GLM_ZUP, context->current_values.current_normal);
+    glNormal3f(0.0f, 0.0f, 1.0f);
 
-    /* --- Table 6.4/6.5: Client vertex array state --- */
-    context->vertex_array_data.client_active_texture = GL_TEXTURE0;
-    glActiveTexture(GL_TEXTURE0);
+    /* --- Table 6.4 Vertex Array Data --- */
+    glClientActiveTexture(GL_TEXTURE0);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(4, GL_FLOAT, 0, NULL);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    glNormalPointer(GL_FLOAT, 0, NULL);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glColorPointer(4, GL_FLOAT, 0, NULL);
 
-    /* Vertex */
-    context->vertex_array_data.vertex_array_enabled = GL_FALSE;
-    context->vertex_array_data.vertex_array_dirty = GL_TRUE;
-    context->vertex_array_data.vertex_array_size = 4;
-    context->vertex_array_data.vertex_array_type = GL_FLOAT;
-    context->vertex_array_data.vertex_array_stride = 0;
-    context->vertex_array_data.vertex_array_ptr = NULL;
-    glVertexPointer(context->vertex_array_data.vertex_array_size,
-                    context->vertex_array_data.vertex_array_type,
-                    context->vertex_array_data.vertex_array_stride,
-                    context->vertex_array_data.vertex_array_ptr);
-
-    /* Normal (size is always 3 in ES 1.1) */
-    context->vertex_array_data.normal_array_enabled = GL_FALSE;
-    context->vertex_array_data.normal_array_dirty = GL_TRUE;
-    context->vertex_array_data.normal_array_type = GL_FLOAT; /* BYTE/SHORT/FIXED/FLOAT allowed */
-    context->vertex_array_data.normal_array_stride = 0;
-    context->vertex_array_data.normal_array_ptr = NULL;
-    glNormalPointer(context->vertex_array_data.normal_array_type,
-                    context->vertex_array_data.normal_array_stride,
-                    context->vertex_array_data.normal_array_ptr);
-
-    /* Color (size must be 4 in ES 1.1) */
-    context->vertex_array_data.color_array_enabled = GL_FALSE;
-    context->vertex_array_data.color_array_dirty = GL_TRUE;
-    context->vertex_array_data.color_array_size = 4;
-    context->vertex_array_data.color_array_type = GL_FLOAT;
-    context->vertex_array_data.color_array_stride = 0;
-    context->vertex_array_data.color_array_ptr = NULL;
-    glColorPointer(context->vertex_array_data.color_array_size,
-                   context->vertex_array_data.color_array_type,
-                   context->vertex_array_data.color_array_stride,
-                   context->vertex_array_data.color_array_ptr);
-
-    /* Texcoords per unit */
+    /* --- Table 6.5 Vertex Array Data Continued --- */
     for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
-        context->vertex_array_data.texcoord_array_enabled[i] = GL_FALSE;
-        context->vertex_array_data.texcoord_array_dirty[i] = GL_TRUE;
-        context->vertex_array_data.texcoord_array_size[i] = 4;
-        context->vertex_array_data.texcoord_array_type[i] = GL_FLOAT; /* FIXED/FLOAT allowed */
-        context->vertex_array_data.texcoord_array_stride[i] = 0;
-        context->vertex_array_data.texcoord_array_ptr[i] = NULL;
-        glActiveTexture(GL_TEXTURE0 + i);
-        glTexCoordPointer(context->vertex_array_data.texcoord_array_size[i],
-                          context->vertex_array_data.texcoord_array_type[i],
-                          context->vertex_array_data.texcoord_array_stride[i],
-                          context->vertex_array_data.texcoord_array_ptr[i]);
+        glClientActiveTexture(GL_TEXTURE0 + i);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(4, GL_FLOAT, 0, NULL);
     }
-    glActiveTexture(GL_TEXTURE0);
+    glClientActiveTexture(GL_TEXTURE0);
 
-    /* OES_point_size_array (if present in your build; harmless defaults otherwise) */
-    context->vertex_array_data.point_size_array_enabled = GL_FALSE;
-    context->vertex_array_data.point_size_array_dirty = GL_TRUE;
-    context->vertex_array_data.point_size_array_type = GL_FLOAT; /* or GL_FIXED (OES) */
-    context->vertex_array_data.point_size_array_stride = 0;
-    context->vertex_array_data.point_size_array_ptr = NULL;
-    glPointSizePointerOES(context->vertex_array_data.point_size_array_type,
-                          context->vertex_array_data.point_size_array_stride,
-                          context->vertex_array_data.point_size_array_ptr);
+    /* OES_point_size_array */
+    glDisableClientState(GL_POINT_SIZE_ARRAY_OES);
+    glPointSizePointerOES(GL_FLOAT, 0, NULL);
 
     /* Buffer bindings (global) + any per-attribute names you track */
-    context->vertex_array_data.array_buffer_binding = 0;
-    context->vertex_array_data.vertex_array_buffer_binding = 0;
-    context->vertex_array_data.normal_array_buffer_binding = 0;
-    context->vertex_array_data.color_array_buffer_binding = 0;
-
-    for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
-        context->vertex_array_data.texcoord_array_buffer_binding[i] = 0;
-    }
-    context->vertex_array_data.point_size_array_buffer_binding = 0;
-    context->vertex_array_data.element_array_buffer_binding = 0;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -712,28 +653,6 @@ void glContextInit(GLint window_width, GLint window_height)
     context->buffer_objects = NULL;
 
     /* --- Table 6.7: Transformation state --- */
-    for (int i = 0; i < GLI_MAX_MODELVIEW_STACK; ++i) {
-        glm_mat4_identity(context->transformation_state.modelview_matrix_stack[i]);
-    }
-    for (int i = 0; i < GLI_MAX_PROJECTION_STACK; ++i) {
-        glm_mat4_identity(context->transformation_state.projection_matrix_stack[i]);
-    }
-    for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
-        for (int i = 0; i < GLI_MAX_TEXTURE_STACK; ++i) {
-            glm_mat4_identity(context->transformation_state.texture_matrix_stack[u][i]);
-        }
-    }
-
-    context->transformation_state.viewport[0] = 0;
-    context->transformation_state.viewport[1] = 0;
-    context->transformation_state.viewport[2] = window_width;
-    context->transformation_state.viewport[3] = window_height;
-    glViewport(0, 0, window_width, window_height);
-
-    context->transformation_state.depth_range[0] = 0.0f;
-    context->transformation_state.depth_range[1] = 1.0f;
-    glDepthRangef(context->transformation_state.depth_range[0], context->transformation_state.depth_range[1]);
-
     /* Each stack starts with one identity matrix */
     context->transformation_state.modelview_matrix_stack_depth = 1;
     context->transformation_state.projection_matrix_stack_depth = 1;
@@ -741,245 +660,175 @@ void glContextInit(GLint window_width, GLint window_height)
         context->transformation_state.texture_matrix_stack_depth[u] = 1;
     }
 
-    context->transformation_state.matrix_mode = GL_MODELVIEW;
-    context->transformation_state.normalize_enabled = GL_FALSE;
-    context->transformation_state.rescale_normal_enabled = GL_FALSE;
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
+    for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glMatrixMode(GL_TEXTURE);
+        glLoadIdentity();
+    }
+    glActiveTexture(GL_TEXTURE0);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glViewport(0, 0, window_width, window_height);
+    glDepthRangef(0.0f, 1.0f);
+
+    glDisable(GL_NORMALIZE);
+    glDisable(GL_RESCALE_NORMAL);
 
     for (int i = 0; i < GLI_MAX_CLIP_PLANES; ++i) {
-        glm_vec4_copy(GLM_VEC4_ZERO, context->transformation_state.clip_plane[i]);
-        context->transformation_state.clip_plane_enabled[i] = GL_FALSE;
+        glDisable(GL_CLIP_PLANE0 + i);
+        glClipPlanef(GL_CLIP_PLANE0 + i, GLM_VEC4_ZERO);
     }
-    context->transformation_state.clip_plane_dirty = GL_TRUE;
 
     /* --- Table 6.8: Coloring (fog & shading) --- */
-    glm_vec4_copy(GLM_VEC4_ZERO, context->coloring_state.fog_color);
-    context->coloring_state.fog_density = 1.0f;
-    context->coloring_state.fog_start = 0.0f;
-    context->coloring_state.fog_end = 1.0f;
-    context->coloring_state.fog_mode = GL_EXP;
-    context->coloring_state.fog_enabled = GL_FALSE;
-    context->coloring_state.fog_dirty = GL_TRUE;
-    glFogf(GL_FOG_DENSITY, context->coloring_state.fog_density);
-    glFogf(GL_FOG_START, context->coloring_state.fog_start);
-    glFogf(GL_FOG_END, context->coloring_state.fog_end);
-    glFogf(GL_FOG_MODE, context->coloring_state.fog_mode);
+    glFogfv(GL_FOG_COLOR, GLM_VEC4_ZERO);
+    glFogf(GL_FOG_DENSITY, 1.0f);
+    glFogf(GL_FOG_START, 0.0f);
+    glFogf(GL_FOG_END, 1.0f);
+    glFogf(GL_FOG_MODE, GL_EXP);
     glDisable(GL_FOG);
-
-    context->coloring_state.shade_model = GL_SMOOTH;
-    glShadeModel(context->coloring_state.shade_model);
-
-    context->lighting_state.lighting_enabled = GL_FALSE;
+    glShadeModel(GL_SMOOTH);
     glDisable(GL_LIGHTING);
-    context->lighting_state.color_material_enabled = GL_FALSE;
     glDisable(GL_COLOR_MATERIAL);
 
-    glm_vec4_copy((vec4){0.2f, 0.2f, 0.2f, 1.0f}, context->lighting_state.material_front.ambient);
-    glm_vec4_copy((vec4){0.8f, 0.8f, 0.8f, 1.0f}, context->lighting_state.material_front.diffuse);
-    glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_front.specular);
-    glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_front.emission);
-    context->lighting_state.material_front.shininess = 0.0f;
-    context->lighting_state.material_front.material_dirty = GL_TRUE;
+    GLfloat mat_ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
+    GLfloat mat_diffuse[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+    GLfloat mat_specular[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    GLfloat mat_emission[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_emission);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0f);
 
-    glm_vec4_copy((vec4){0.2f, 0.2f, 0.2f, 1.0f}, context->lighting_state.material_back.ambient);
-    glm_vec4_copy((vec4){0.8f, 0.8f, 0.8f, 1.0f}, context->lighting_state.material_back.diffuse);
-    glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_back.specular);
-    glm_vec4_copy(GLM_VEC4_BLACK, context->lighting_state.material_back.emission);
-    context->lighting_state.material_back.shininess = 0.0f;
-    context->lighting_state.material_back.material_dirty = GL_TRUE;
+    GLfloat lm_ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_ambient);
+    glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, 0.0f);
 
-    glm_vec4_copy((vec4){0.2f, 0.2f, 0.2f, 1.0f}, context->lighting_state.light_model_ambient);
-    context->lighting_state.lighting_model_dirty = GL_TRUE;
-    context->lighting_state.light_model_two_side = GL_FALSE;
-
+    GLfloat light_ambient[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    GLfloat light_diffuse_zero[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    GLfloat light_diffuse_one[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    GLfloat light_position[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+    GLfloat light_spot_dir[3] = {0.0f, 0.0f, -1.0f};
     for (int i = 0; i < GLI_MAX_LIGHTS; ++i) {
-        light_t *light = &context->lighting_state.lights[i];
+        GLenum light = GL_LIGHT0 + i;
+        glDisable(light);
 
-        glm_vec4_copy(GLM_VEC4_BLACK, light->ambient);
+        glLightfv(light, GL_AMBIENT, light_ambient);
         if (i == 0) {
-            glm_vec4_copy(GLM_VEC4_ONE, light->diffuse);
-            glm_vec4_copy(GLM_VEC4_ONE, light->specular);
-
+            glLightfv(light, GL_DIFFUSE, light_diffuse_one);
+            glLightfv(light, GL_SPECULAR, light_diffuse_one);
         } else {
-            glm_vec4_copy(GLM_VEC4_BLACK, light->diffuse);
-            glm_vec4_copy(GLM_VEC4_BLACK, light->specular);
+            glLightfv(light, GL_DIFFUSE, light_diffuse_zero);
+            glLightfv(light, GL_SPECULAR, light_diffuse_zero);
         }
 
-        glm_vec4_copy((vec4){0.0f, 0.0f, 1.0f, 0.0f}, light->position);
-        light->constant_attenuation = 1.0f;
-        light->linear_attenuation = 0.0f;
-        light->quadratic_attenuation = 0.0f;
-        glm_vec3_copy(GLM_FORWARD, light->spot_direction);
-        light->spot_exponent = 0.0f;
-        light->spot_cutoff = 180.0f; /* disabled */
-        light->enabled = GL_FALSE;
-        light->light_dirty = GL_TRUE;
+        glLightfv(light, GL_POSITION, light_position);
+        glLightfv(light, GL_SPOT_DIRECTION, light_spot_dir);
+        glLightf(light, GL_SPOT_EXPONENT, 0.0f);
+        glLightf(light, GL_SPOT_CUTOFF, 180.0f);
+        glLightf(light, GL_CONSTANT_ATTENUATION, 1.0f);
+        glLightf(light, GL_LINEAR_ATTENUATION, 0.0f);
+        glLightf(light, GL_QUADRATIC_ATTENUATION, 0.0f);
     }
 
     /* --- Table 6.11: Rasterization --- */
     /* Points */
-    context->rasterization_state.point_size = 1.0f;
-    context->rasterization_state.point_smooth_enabled = GL_FALSE;
-    context->rasterization_state.point_size_min = 0.0f;
-    context->rasterization_state.point_size_max = context->implementation_limits.aliased_point_size_range[1];
-    context->rasterization_state.point_fade_threshold_size = 1.0f;
-    context->rasterization_state.point_distance_attenuation[0] = 1.0f;
-    context->rasterization_state.point_distance_attenuation[1] = 0.0f;
-    context->rasterization_state.point_distance_attenuation[2] = 0.0f;
-    context->rasterization_state.point_sprite_oes_enabled = GL_FALSE; /* OES_point_sprite */
-    context->rasterization_state.point_params_dirty = GL_TRUE;
-    glPointSize(context->rasterization_state.point_size);
+    glPointSize(1.0f);
     glDisable(GL_POINT_SMOOTH);
-    glPointParameterf(GL_POINT_SIZE_MIN, context->rasterization_state.point_size_min);
-    glPointParameterf(GL_POINT_SIZE_MAX, context->rasterization_state.point_size_max);
-    glPointParameterf(GL_POINT_FADE_THRESHOLD_SIZE, context->rasterization_state.point_fade_threshold_size);
-    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, context->rasterization_state.point_distance_attenuation);
+    glPointParameterf(GL_POINT_SIZE_MIN, 0.0f);
+    glPointParameterf(GL_POINT_SIZE_MAX, GLI_MAX_ALIASED_POINT_SIZE);
+    glPointParameterf(GL_POINT_FADE_THRESHOLD_SIZE, 1.0f);
+    GLfloat point_dist_attenuation[3] = {1.0f, 0.0f, 0.0f};
+    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, point_dist_attenuation);
     glDisable(GL_POINT_SPRITE_OES);
 
     /* Lines */
-    context->rasterization_state.line_width = 1.0f;
-    context->rasterization_state.line_smooth_enabled = GL_FALSE;
-    glLineWidth(context->rasterization_state.line_width);
-    glDisable(context->rasterization_state.line_smooth_enabled);
+    glLineWidth(1.0f);
+    glDisable(GL_LINE_SMOOTH);
 
     /* Polygons / culling / offset */
-    context->rasterization_state.cull_face_enabled = GL_FALSE;
-    context->rasterization_state.cull_face_mode = GL_BACK;
-    context->rasterization_state.cull_front_face = GL_CCW;
-    context->rasterization_state.polygon_offset_factor = 0.0f;
-    context->rasterization_state.polygon_offset_units = 0.0f;
-    context->rasterization_state.polygon_offset_fill_enabled = GL_FALSE;
     glDisable(GL_CULL_FACE);
-    glCullFace(context->rasterization_state.cull_face_mode);
-    glFrontFace(context->rasterization_state.cull_front_face);
-    glPolygonOffset(context->rasterization_state.polygon_offset_factor,
-                    context->rasterization_state.polygon_offset_units);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+    glPolygonOffset(0.0f, 0.0f);
     glDisable(GL_POLYGON_OFFSET_FILL);
 
     /* --- Table 6.12: Multisampling --- */
-    context->multisampling_state.multisample_enabled = GL_TRUE;
-    context->multisampling_state.sample_alpha_to_coverage_enabled = GL_FALSE;
-    context->multisampling_state.sample_alpha_to_one_enabled = GL_FALSE;
-    context->multisampling_state.sample_coverage_enabled = GL_FALSE;
-    context->multisampling_state.sample_coverage_value = 1.0f;
-    context->multisampling_state.sample_coverage_invert = GL_FALSE;
     glEnable(GL_MULTISAMPLE);
+    glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+    glDisable(GL_SAMPLE_ALPHA_TO_ONE);
+    glDisable(GL_SAMPLE_COVERAGE);
     glSampleCoverage(1.0f, GL_FALSE);
 
     /* --- Tables 6.13/6.14: Textures & TexEnv (per unit) --- */
-    context->texture_environment.server_active_texture = GL_TEXTURE0;
-    context->texture_environment.texture_objects = NULL;
-
-    // Set up default texture unit that is used for all units initially
     for (GLint i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
-        texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
-        texture_unit->texture_unit_dirty = GL_TRUE;
-        texture_unit->texture_2d_enabled = GL_FALSE;
-        texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
-        {
-            // According to spec all texture units have same default texture binding with 0 name
-            texture_unit->unbound_texture_object.texture_name = 0;
-            texture_unit->unbound_texture_object.texture_object_dirty = GL_TRUE;
-            texture_unit->unbound_texture_object.min_filter = GL_NEAREST_MIPMAP_LINEAR;
-            texture_unit->unbound_texture_object.mag_filter = GL_LINEAR;
-            texture_unit->unbound_texture_object.wrap_s = GL_REPEAT;
-            texture_unit->unbound_texture_object.wrap_t = GL_REPEAT;
-            texture_unit->unbound_texture_object.generate_mipmap = GL_FALSE;
-        }
-        texture_unit->texture_binding_2d = 0;
-        texture_unit->tex_env_mode = GL_MODULATE;
-        texture_unit->coord_replace_oes_enabled = GL_FALSE;
-        glm_vec4_zero(texture_unit->tex_env_color);
+        glActiveTexture(GL_TEXTURE0 + i);
+        glDisable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
 
-        texture_unit->combine_rgb_function = GL_MODULATE;
-        texture_unit->combine_alpha_function = GL_MODULATE;
-        texture_unit->combine_rgb_source[0] = GL_TEXTURE;
-        texture_unit->combine_rgb_source[1] = GL_PREVIOUS;
-        texture_unit->combine_rgb_source[2] = GL_CONSTANT;
-        texture_unit->combine_alpha_source[0] = GL_TEXTURE;
-        texture_unit->combine_alpha_source[1] = GL_PREVIOUS;
-        texture_unit->combine_alpha_source[2] = GL_CONSTANT;
-        texture_unit->combine_rgb_operand[0] = GL_SRC_COLOR;
-        texture_unit->combine_rgb_operand[1] = GL_SRC_COLOR;
-        texture_unit->combine_rgb_operand[2] = GL_SRC_ALPHA;
-        texture_unit->combine_alpha_operand[0] = GL_SRC_ALPHA;
-        texture_unit->combine_alpha_operand[1] = GL_SRC_ALPHA;
-        texture_unit->combine_alpha_operand[2] = GL_SRC_ALPHA;
-        texture_unit->rgb_scale = 1.0f;
-        texture_unit->alpha_scale = 1.0f;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_FALSE);
+
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, GLM_VEC4_ZERO);
+        glTexEnvi(GL_POINT_SPRITE_OES, GL_COORD_REPLACE_OES, GL_FALSE);
+
+        glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+        glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_TEXTURE);
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_PREVIOUS);
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC2_RGB, GL_CONSTANT);
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_TEXTURE);
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_PREVIOUS);
+        glTexEnvi(GL_TEXTURE_ENV, GL_SRC2_ALPHA, GL_CONSTANT);
+
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND2_RGB, GL_SRC_ALPHA);
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
+        glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND2_ALPHA, GL_SRC_ALPHA);
+
+        glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+        glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
     }
+    glActiveTexture(GL_TEXTURE0);
 
     /* --- Table 6.16: Per-fragment / pixel ops --- */
-    context->pixel_ops_state.scissor_test_enabled = GL_FALSE;
-    context->pixel_ops_state.scissor_box[0] = 0;
-    context->pixel_ops_state.scissor_box[1] = 0;
-    context->pixel_ops_state.scissor_box[2] = window_width;
-    context->pixel_ops_state.scissor_box[3] = window_height;
     glDisable(GL_SCISSOR_TEST);
-
-    context->pixel_ops_state.alpha_test_enabled = GL_FALSE;
-    context->pixel_ops_state.alpha_test_func = GL_ALWAYS;
-    context->pixel_ops_state.alpha_test_ref = 0.0f;
+    glScissor(0, 0, window_width, window_height);
     glDisable(GL_ALPHA_TEST);
     glAlphaFunc(GL_ALWAYS, 0.0f);
-
-    context->pixel_ops_state.stencil_test_enabled = GL_FALSE;
-    context->pixel_ops_state.stencil_func = GL_ALWAYS;
-    context->pixel_ops_state.stencil_value_mask = ~0u;
-    context->pixel_ops_state.stencil_ref = 0;
-    context->pixel_ops_state.stencil_fail_op = GL_KEEP;
-    context->pixel_ops_state.stencil_zfail_op = GL_KEEP;
-    context->pixel_ops_state.stencil_zpass_op = GL_KEEP;
     glDisable(GL_STENCIL_TEST);
     glStencilFunc(GL_ALWAYS, 0, ~0u);
     glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
-    context->pixel_ops_state.depth_test_enabled = GL_FALSE;
-    context->pixel_ops_state.depth_func = GL_LESS;
     glDisable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-
-    context->pixel_ops_state.blend_enabled = GL_FALSE;
-    context->pixel_ops_state.blend_src = GL_ONE;
-    context->pixel_ops_state.blend_dst = GL_ZERO;
     glDisable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ZERO);
-
-    context->pixel_ops_state.dither_enabled = GL_TRUE;
+    glDisable(GL_COLOR_LOGIC_OP);
+    glLogicOp(GL_COPY);
     glEnable(GL_DITHER);
 
-    context->pixel_ops_state.color_logic_op_enabled = GL_FALSE;
-    context->pixel_ops_state.color_logic_op = GL_COPY;
-    glDisable(GL_COLOR_LOGIC_OP);
-    glLogicOp(context->pixel_ops_state.color_logic_op);
-
     /* --- Table 6.17: Framebuffer control --- */
-    context->framebuffer_control.color_mask[0] = GL_TRUE;
-    context->framebuffer_control.color_mask[1] = GL_TRUE;
-    context->framebuffer_control.color_mask[2] = GL_TRUE;
-    context->framebuffer_control.color_mask[3] = GL_TRUE;
-    context->framebuffer_control.depth_writemask = GL_TRUE;
-    context->framebuffer_control.stencil_writemask = ~0u;
-    glColorMask(context->framebuffer_control.color_mask[0],
-                context->framebuffer_control.color_mask[1],
-                context->framebuffer_control.color_mask[2],
-                context->framebuffer_control.color_mask[3]);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthMask(GL_TRUE);
-    glStencilMask(context->framebuffer_control.stencil_writemask);
-
-    glm_vec4_copy(GLM_VEC4_ZERO, context->framebuffer_control.clear_color);
-    context->framebuffer_control.clear_depth = 1.0f;
-    context->framebuffer_control.clear_stencil = 0;
-    glClearColor(context->framebuffer_control.clear_color[0],
-                 context->framebuffer_control.clear_color[1],
-                 context->framebuffer_control.clear_color[2],
-                 context->framebuffer_control.clear_color[3]);
-    glClearDepthf(context->framebuffer_control.clear_depth);
-    glClearStencil(context->framebuffer_control.clear_stencil);
+    glStencilMask(~0u);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClearDepthf(1.0f);
+    glClearStencil(0);
 
     gliFlushStateChange();
-
     gliStagingInit();
-
     while (pb_busy()) {
     }
 }
