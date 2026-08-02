@@ -769,7 +769,6 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                                      GLenum type,
                                      const void *pixels)
 {
-    // FIXME mipmap levels
     gli_context_t *context = gliGetContext();
 
     if (target != GL_TEXTURE_2D) {
@@ -814,6 +813,112 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         return;
     }
 
+    // Get the currently bound texture object
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
+    texture_object_t *texture_object = texture_unit->bound_texture_object;
+
+    if (level > 0) {
+        if (texture_object->texture_name == 0 || texture_object->texture_2d == NULL) {
+            gliSetError(GL_INVALID_OPERATION); // Can't define mipmap without base level on this hardware
+            return;
+        }
+
+        xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
+        if (!xgu_texture->swizzled) {
+            gliSetError(GL_INVALID_OPERATION); // Mipmaps require POT swizzled textures
+            return;
+        }
+
+        // Ensure the level matches the expected dimensions based on level 0
+        GLuint expected_w = xgu_texture->data_width;
+        GLuint expected_h = xgu_texture->data_height;
+        for (GLint i = 0; i < level; i++) {
+            if (expected_w > 1) {
+                expected_w /= 2;
+            }
+            if (expected_h > 1) {
+                expected_h /= 2;
+            }
+        }
+
+        if ((GLuint)width != expected_w || (GLuint)height != expected_h) {
+            gliSetError(GL_INVALID_VALUE);
+            return;
+        }
+
+        // Calculate offset to the mipmap level
+        GLuint required_size;
+        uint8_t required_levels;
+        gliCalcMipmapChain(xgu_texture->data_width,
+                               xgu_texture->data_height,
+                               xgu_texture->bytes_per_pixel,
+                               &required_size,
+                               &required_levels);
+
+        if (level >= required_levels) {
+            gliSetError(GL_INVALID_VALUE);
+            return;
+        }
+
+        // Check if we need to reallocate the texture to fit mipmaps
+        if (xgu_texture->data_size < required_size) {
+            GLubyte *new_data =
+                MmAllocateContiguousMemoryEx(required_size, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+            if (!new_data) {
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
+
+            GLuint base_size = xgu_texture->data_width * xgu_texture->data_height * xgu_texture->bytes_per_pixel;
+            gli_memcpy(new_data, xgu_texture->data, base_size);
+
+            MmFreeContiguousMemory(xgu_texture->data);
+            xgu_texture->data = new_data;
+            xgu_texture->data_size = required_size;
+            xgu_texture->data_physical_address = (GLubyte *)MmGetPhysicalAddress(xgu_texture->data);
+            xgu_texture->mipmap_levels = required_levels;
+        }
+
+        // Calculate offset for the current level
+        GLuint level_offset = 0;
+        GLuint current_w = xgu_texture->data_width;
+        GLuint current_h = xgu_texture->data_height;
+        for (GLint i = 0; i < level; i++) {
+            level_offset += current_w * current_h * xgu_texture->bytes_per_pixel;
+            if (current_w > 1) {
+                current_w /= 2;
+            }
+            if (current_h > 1) {
+                current_h /= 2;
+            }
+        }
+
+        if (pixels != NULL) {
+            const GLint alignment = context->pixel_store.unpack_alignment;
+            const size_t src_pitch =
+                (((size_t)width * (size_t)xgu_texture->bytes_per_pixel) + (alignment - 1)) & ~(size_t)(alignment - 1);
+
+            const GLubyte *src_pixels = (GLubyte *)pixels;
+            if (type == GL_UNSIGNED_BYTE && (format == GL_RGB || format == GL_RGBA)) {
+                GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+                convert_to_bgra(src_pixels, converted_pixels, width * height, (format == GL_RGBA) ? 4 : 3);
+                src_pixels = converted_pixels;
+            }
+
+            swizzle_rect(
+                src_pixels, width, height, xgu_texture->data + level_offset, src_pitch, xgu_texture->bytes_per_pixel);
+
+            if (src_pixels != (GLubyte *)pixels) {
+                GLI_FREE((void *)src_pixels);
+            }
+        }
+
+        texture_object->texture_object_dirty = GL_TRUE;
+        return;
+    }
+
+    // level == 0
     xgu_texture_t *xgu_texture = GLI_MALLOC(sizeof(xgu_texture_t));
     if (xgu_texture == NULL) {
         gliSetError(GL_OUT_OF_MEMORY);
@@ -848,6 +953,7 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     xgu_texture->tex_width = width;
     xgu_texture->tex_height = height;
     xgu_texture->bytes_per_pixel = bytes_per_pixel;
+    xgu_texture->mipmap_levels = 1;
 
     // Width must be atleast 8 pixels
     xgu_texture->data_width = GLI_MAX(8, xgu_texture->data_width);
@@ -860,9 +966,24 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         xgu_texture->pitch = (xgu_texture->data_width * bytes_per_pixel + 63) & ~63;
     }
 
+    // Allocate space for mipmaps immediately if GL_GENERATE_MIPMAP is enabled and it's swizzled
+    GLuint alloc_size = xgu_texture->pitch * xgu_texture->data_height;
+    if (xgu_texture->swizzled && texture_object->generate_mipmap) {
+        GLuint required_size;
+        uint8_t required_levels;
+        gliCalcMipmapChain(xgu_texture->data_width,
+                               xgu_texture->data_height,
+                               xgu_texture->bytes_per_pixel,
+                               &required_size,
+                               &required_levels);
+        alloc_size = required_size;
+        xgu_texture->mipmap_levels = required_levels;
+    }
+
     xgu_texture->format = xgu_format;
-    xgu_texture->data = MmAllocateContiguousMemoryEx(
-        xgu_texture->pitch * xgu_texture->data_height, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    xgu_texture->data_size = alloc_size;
+    xgu_texture->data =
+        MmAllocateContiguousMemoryEx(alloc_size, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
     if (xgu_texture->data == NULL) {
         GLI_FREE(xgu_texture);
         gliSetError(GL_OUT_OF_MEMORY);
@@ -905,12 +1026,21 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         gli_memset(xgu_texture->data, 0, xgu_texture->pitch * xgu_texture->data_height);
     }
 
-    // Bind the texture to the currently bound texture object
-    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
-    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
-    texture_object_t *texture_object = texture_unit->bound_texture_object;
+    if (texture_object->texture_2d != NULL) {
+        xgu_texture_t *old_tex = (xgu_texture_t *)texture_object->texture_2d;
+        if (old_tex->data) {
+            MmFreeContiguousMemory(old_tex->data);
+        }
+        GLI_FREE(old_tex);
+    }
+
     texture_object->texture_2d = xgu_texture;
     texture_object->internalformat = internalformat;
+
+    if (xgu_texture->swizzled && texture_object->generate_mipmap) {
+        gliGenSwizzledMipmaps(xgu_texture);
+    }
+
     texture_object->texture_object_dirty = GL_TRUE;
 }
 
@@ -1047,12 +1177,13 @@ void gliTextureFlush(void)
                                     XGU_SOURCE_COLOR,
                                     2,
                                     xgu_texture->format,
-                                    1,
+                                    xgu_texture->mipmap_levels,
                                     __builtin_ctz(xgu_texture->tex_width),  // Only used for swizzled
                                     __builtin_ctz(xgu_texture->tex_height), // Only used for swizzled
                                     0);
 
-        pb = xgu_set_texture_control0(pb, i, true, 0, 0);
+        uint16_t max_lod = (xgu_texture->mipmap_levels > 0) ? (xgu_texture->mipmap_levels - 1) << 8 : 0;
+        pb = xgu_set_texture_control0(pb, i, true, 0, max_lod);
         if (!xgu_texture->swizzled) {
             pb = xgu_set_texture_control1(pb, i, xgu_texture->pitch);                                // NPOT PITCH
             pb = xgu_set_texture_image_rect(pb, i, xgu_texture->tex_width, xgu_texture->tex_height); // NPOT SIZE
