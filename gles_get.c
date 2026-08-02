@@ -1,5 +1,43 @@
 #include "gles_private.h"
 
+static GLint get_color_bits(gli_context_t *context, GLenum pname)
+{
+    uint32_t fmt = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_COLOR) >> 0;
+    switch (fmt) {
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8:
+            return 8;
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_Z8R8G8B8:
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_O8R8G8B8:
+            if (pname == GL_ALPHA_BITS) {
+                return 0;
+            }
+            return 8;
+        case NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5:
+            if (pname == GL_GREEN_BITS) {
+                return 6;
+            }
+            if (pname == GL_ALPHA_BITS) {
+                return 0;
+            }
+            return 5;
+        default:
+            return 0;
+    }
+}
+
+static GLint get_zeta_bits(gli_context_t *context, GLenum pname)
+{
+    uint32_t fmt = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_ZETA) >> 4;
+    switch (fmt) {
+        case NV097_SET_SURFACE_FORMAT_ZETA_Z24S8:
+            return (pname == GL_DEPTH_BITS) ? 24 : 8;
+        case NV097_SET_SURFACE_FORMAT_ZETA_Z16:
+            return (pname == GL_DEPTH_BITS) ? 16 : 0;
+        default:
+            return 0;
+    }
+}
+
 enum gli_get_type
 {
     GLI_BOOLEAN,
@@ -239,13 +277,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_FLOAT;
             *element_count = 2;
             return context->implementation_limits.aliased_line_width_range;
-        case GL_ALPHA_BITS:
+        case GL_ALPHA_BITS: {
             // params returns one value, the number of alpha bitplanes in the color buffer.
             *element_type = GLI_INT;
             *element_count = 1;
-            //// FIXME. 8 for RGBA8888 etc
-            assert(0);
-            return NULL;
+            static GLint alpha_bits;
+            alpha_bits = get_color_bits(context, GL_ALPHA_BITS);
+            return &alpha_bits;
+        }
         case GL_ALPHA_TEST:
             // params returns a single boolean value indicating whether alpha testing of fragments is enabled. The
             // initial value is GL_FALSE. See glAlphaFunc.
@@ -289,13 +328,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->pixel_ops_state.blend_src;
-        case GL_BLUE_BITS:
+        case GL_BLUE_BITS: {
             // params returns one value, the number of blue bitplanes in the color buffer.
             *element_type = GLI_INT;
             *element_count = 1;
-            //// FIXME. 8 for RGBA8888 etc
-            assert(0);
-            return NULL;
+            static GLint blue_bits;
+            blue_bits = get_color_bits(context, GL_BLUE_BITS);
+            return &blue_bits;
+        }
         case GL_CLIENT_ACTIVE_TEXTURE:
             // params returns a single value indicating the current client active multitexture unit. The initial value
             // is GL_TEXTURE0. See glClientActiveTexture.
@@ -399,14 +439,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_FLOAT;
             *element_count = 4;
             return (GLfloat *)context->current_values.current_texcoord[tu];
-        case GL_DEPTH_BITS:
+        case GL_DEPTH_BITS: {
             // params returns one value, the number of bitplanes in the depth buffer.
-            // FIXME. 24 for D24S8 etc
             *element_type = GLI_INT;
             *element_count = 1;
-            assert(0);
-            return NULL;
-            break;
+            static GLint depth_bits;
+            depth_bits = get_zeta_bits(context, GL_DEPTH_BITS);
+            return &depth_bits;
+        }
         case GL_DEPTH_CLEAR_VALUE:
             // params returns one value, the value that is used to clear the depth buffer. See glClearDepth.
             *element_type = GLI_FLOAT;
@@ -483,13 +523,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->rasterization_state.cull_front_face;
-        case GL_GREEN_BITS:
+        case GL_GREEN_BITS: {
             // params returns one value, the number of green bitplanes in the color buffer.
             *element_type = GLI_INT;
             *element_count = 1;
-            //// FIXME. 8 for RGBA8888 etc
-            assert(0);
-            return NULL;
+            static GLint green_bits;
+            green_bits = get_color_bits(context, GL_GREEN_BITS);
+            return &green_bits;
+        }
         case GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES: {
             // params returns one value, the preferred format for pixel read back. See glReadPixels.
             *element_type = GLI_INT;
@@ -773,13 +814,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->transformation_state.projection_matrix_stack_depth;
-        case GL_RED_BITS:
+        case GL_RED_BITS: {
             // params returns one value, the number of red bitplanes in each color buffer.
             *element_type = GLI_INT;
             *element_count = 1;
-            //// FIXME. 8 for RGBA8888 etc
-            assert(0);
-            return NULL;
+            static GLint red_bits;
+            red_bits = get_color_bits(context, GL_RED_BITS);
+            return &red_bits;
+        }
         case GL_RESCALE_NORMAL:
             // params returns a single boolean value indicating whether rescaling of normals is enabled. The initial
             // value is GL_FALSE. See glNormal.
@@ -866,12 +908,14 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_FLOAT;
             *element_count = 2;
             return context->implementation_limits.antialiased_point_size_range;
-        case GL_STENCIL_BITS:
+        case GL_STENCIL_BITS: {
             // params returns one value, the number of bitplanes in the stencil buffer.
             *element_type = GLI_INT;
             *element_count = 1;
-            //// FIXME. 8 for D24S8 etc
-            return NULL;
+            static GLint stencil_bits;
+            stencil_bits = get_zeta_bits(context, GL_STENCIL_BITS);
+            return &stencil_bits;
+        }
         case GL_STENCIL_CLEAR_VALUE:
             // params returns one value, the index to which the stencil bitplanes are cleared. See glClearStencil.
             *element_type = GLI_INT;
