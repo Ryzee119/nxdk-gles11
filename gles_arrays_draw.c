@@ -241,6 +241,13 @@ GL_API void GL_APIENTRY glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
     gliFlushStateChange();
     xgux_draw_arrays(primitive, first, count);
+
+    // The current color, normal, point size, and texture coordinates each become indeterminate after the execution of
+    // DrawArrays, however based on testing on my PC, atleast color seems to be restored. FIXME. Check others
+    glColor4f(context->current_values.current_color[0],
+              context->current_values.current_color[1],
+              context->current_values.current_color[2],
+              context->current_values.current_color[3]);
 }
 
 GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices)
@@ -303,6 +310,13 @@ GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, 
     } else {
         xgux_draw_elements32(primitive, (const uint32_t *)indices_ptr, (unsigned int)count);
     }
+
+    // The current color, normal, point size, and texture coordinates each become indeterminate after the execution of
+    // DrawElements, however based on testing on my PC, atleast color seems to be restored. FIXME. Check others
+    glColor4f(context->current_values.current_color[0],
+              context->current_values.current_color[1],
+              context->current_values.current_color[2],
+              context->current_values.current_color[3]);
 }
 
 GL_API void GL_APIENTRY glMultiTexCoord4f(GLenum tex, GLfloat s, GLfloat t, GLfloat r, GLfloat q)
