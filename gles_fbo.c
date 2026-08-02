@@ -75,9 +75,13 @@ GL_API void GL_APIENTRY glGenFramebuffersOES(GLsizei n, GLuint *framebuffers)
     }
     static GLuint next = 1;
     for (GLsizei i = 0; i < n; i++) {
-        // Surely we will never wrap around, but skip zero if we so
-        // Fixme, wrap around could cause duplicate names
-        if (next == 0) {
+        while (1) {
+            if (next == 0) {
+                next++;
+            }
+            if (gliFindFramebufferObject(next, NULL) == NULL) {
+                break;
+            }
             next++;
         }
         framebuffers[i] = next++;
@@ -203,9 +207,13 @@ GL_API void GL_APIENTRY glGenRenderbuffersOES(GLsizei n, GLuint *renderbuffers)
     }
     static GLuint next = 1;
     for (GLsizei i = 0; i < n; i++) {
-        // Surely we will never wrap around, but skip zero if we so
-        // Fixme, wrap around could cause duplicate names
-        if (next == 0) {
+        while (1) {
+            if (next == 0) {
+                next++;
+            }
+            if (gliFindRenderbufferObject(next, NULL) == NULL) {
+                break;
+            }
             next++;
         }
         renderbuffers[i] = next++;
