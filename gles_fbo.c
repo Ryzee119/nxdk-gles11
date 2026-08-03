@@ -1,4 +1,5 @@
 #include "gles_private.h"
+#include "pbkit/pbkit.h"
 #include <swizzle.h>
 
 static XguTexFormatColor unswizzle_texture_format(XguTexFormatColor format)
@@ -478,34 +479,39 @@ glFramebufferTexture2DOES(GLenum target, GLenum attachment, GLenum textarget, GL
         att->name = 0;
         att->texture = NULL;
     } else {
-        texture_object_t *tex = gliFindTextureObject(texture, NULL);
-        if (!tex || tex->texture_2d == NULL) {
+        texture_object_t *texture_object = gliFindTextureObject(texture, NULL);
+        if (!texture_object || texture_object->texture_2d == NULL) {
             gliSetError(GL_INVALID_OPERATION);
             return;
         }
 
-        xgu_texture_t *xtex = (xgu_texture_t *)tex->texture_2d;
+        xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
         // Convert swizzled textures to linear when attached to an FBO.
         // This texture will stay linear forever now. FIXME?
-        if (xtex && xtex->swizzled) {
-            uint32_t new_pitch = (xtex->data_width * xtex->bytes_per_pixel + 63) & ~63;
-            uint32_t size = new_pitch * xtex->data_height;
+        if (xgu_texture && xgu_texture->swizzled) {
+            uint32_t new_pitch = (xgu_texture->data_width * xgu_texture->bytes_per_pixel + 63) & ~63;
+            uint32_t size = new_pitch * xgu_texture->data_height;
 
             void *new_data =
                 MmAllocateContiguousMemoryEx(size, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
             if (new_data) {
-                unswizzle_rect(
-                    xtex->data, xtex->data_width, xtex->data_height, new_data, new_pitch, xtex->bytes_per_pixel);
-                MmFreeContiguousMemory(xtex->data);
+                unswizzle_rect(xgu_texture->data,
+                               xgu_texture->data_width,
+                               xgu_texture->data_height,
+                               new_data,
+                               new_pitch,
+                               xgu_texture->bytes_per_pixel);
+                MmFreeContiguousMemory(xgu_texture->data);
 
-                xtex->data = new_data;
-                xtex->data_physical_address = (void *)MmGetPhysicalAddress(new_data);
-                xtex->pitch = new_pitch;
-                xtex->swizzled = 0;
-                xtex->u_scale = (GLfloat)xtex->data_width;
-                xtex->v_scale = (GLfloat)xtex->data_height;
-                xtex->format = unswizzle_texture_format(xtex->format);
+                xgu_texture->data = new_data;
+                xgu_texture->data_physical_address = (void *)MmGetPhysicalAddress(new_data);
+                xgu_texture->pitch = new_pitch;
+                xgu_texture->swizzled = 0;
+                xgu_texture->u_scale = (GLfloat)xgu_texture->data_width;
+                xgu_texture->v_scale = (GLfloat)xgu_texture->data_height;
+                xgu_texture->format = unswizzle_texture_format(xgu_texture->format);
+                texture_object->texture_object_dirty = GL_TRUE;
             } else {
                 gliSetError(GL_OUT_OF_MEMORY);
                 return;
@@ -514,7 +520,7 @@ glFramebufferTexture2DOES(GLenum target, GLenum attachment, GLenum textarget, GL
 
         att->type = GL_TEXTURE_2D;
         att->name = texture;
-        att->texture = tex;
+        att->texture = texture_object;
         att->level = level;
     }
     context->fbo_state_dirty = GL_TRUE;
@@ -727,21 +733,42 @@ void gliFBOFlush(void)
         return;
     }
 
-    context->fbo_state_dirty = GL_FALSE;
-
     // When leaving an FBO back to the default buffer, restore pbkit state cleanly
     if (context->fbo_binding == 0) {
-        pb_target_back_buffer();
         context->current_surface_format =
             XGU_MASK(NV097_SET_SURFACE_FORMAT_COLOR, NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8) |
             XGU_MASK(NV097_SET_SURFACE_FORMAT_ZETA, NV097_SET_SURFACE_FORMAT_ZETA_Z24S8) |
             XGU_MASK(NV097_SET_SURFACE_FORMAT_TYPE, NV097_SET_SURFACE_FORMAT_TYPE_PITCH);
         context->current_surface_width = pb_back_buffer_width();
         context->current_surface_height = pb_back_buffer_height();
-        uint32_t *p = pb_begin();
-        p = xgu_set_front_face(p,
-                               (context->rasterization_state.cull_front_face == GL_CCW) ? XGU_FRONT_CCW : XGU_FRONT_CW);
-        pb_end(p);
+        uint32_t *pb;
+        pb = pb_begin();
+        pb = pb_push1(pb, NV097_WAIT_FOR_IDLE, 0);
+        pb = pb_push1(pb, NV097_SET_CONTEXT_DMA_COLOR, DMA_CHANNEL_PIXEL_RENDERER);
+        pb = pb_push1(pb, NV097_SET_CONTEXT_DMA_ZETA, DMA_CHANNEL_DEPTH_STENCIL_RENDERER);
+        pb = pb_push1(pb,
+                      NV097_SET_SURFACE_PITCH,
+                      XGU_MASK(NV097_SET_SURFACE_PITCH_COLOR, pb_back_buffer_pitch()) |
+                          XGU_MASK(NV097_SET_SURFACE_PITCH_ZETA, pb_back_buffer_pitch()));
+        pb = pb_push1(pb, NV097_SET_SURFACE_COLOR_OFFSET, 0);
+        pb = pb_push1(pb, NV097_SET_SURFACE_ZETA_OFFSET, 0);
+        pb = pb_push1(pb,
+                      NV097_SET_SURFACE_CLIP_HORIZONTAL,
+                      XGU_MASK(NV097_SET_SURFACE_CLIP_HORIZONTAL_WIDTH, context->current_surface_width) |
+                          XGU_MASK(NV097_SET_SURFACE_CLIP_HORIZONTAL_X, 0));
+        pb = pb_push1(pb,
+                      NV097_SET_SURFACE_CLIP_VERTICAL,
+                      XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_HEIGHT, context->current_surface_height) |
+                          XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_Y, 0));
+        pb = pb_push1(pb, NV097_SET_SURFACE_FORMAT, context->current_surface_format);
+
+        // Restore front face direction since FBO != 0 flipped it
+        pb = pb_push1(pb,
+                      NV097_SET_FRONT_FACE,
+                      (context->rasterization_state.cull_front_face == GL_CCW) ? NV097_SET_FRONT_FACE_V_CCW
+                                                                               : NV097_SET_FRONT_FACE_V_CW);
+        pb_end(pb);
+        context->fbo_state_dirty = GL_FALSE;
         return;
     }
 
@@ -795,6 +822,10 @@ void gliFBOFlush(void)
                 return;
         }
 
+        if (tex->swizzled) {
+            fmt_type = NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE;
+        }
+
     } else if (fbo->color.type == GL_RENDERBUFFER_OES && fbo->color.renderbuffer) {
         renderbuffer_object_t *rbo = fbo->color.renderbuffer;
         color_data = rbo->data;
@@ -820,8 +851,8 @@ void gliFBOFlush(void)
         zpitch = pb_back_buffer_pitch();
     }
 
-    const uint32_t log2_width = __builtin_ctz(clip_width);
-    const uint32_t log2_height = __builtin_ctz(clip_height);
+    const uint32_t log2_width = (fmt_type == NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE) ? __builtin_ctz(clip_width) : 0;
+    const uint32_t log2_height = (fmt_type == NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE) ? __builtin_ctz(clip_height) : 0;
     const uint32_t format =
         XGU_MASK(NV097_SET_SURFACE_FORMAT_COLOR, fmt_color) | XGU_MASK(NV097_SET_SURFACE_FORMAT_ZETA, fmt_zeta) |
         XGU_MASK(NV097_SET_SURFACE_FORMAT_TYPE, fmt_type) | XGU_MASK(NV097_SET_SURFACE_FORMAT_WIDTH, log2_width) |
@@ -838,16 +869,18 @@ void gliFBOFlush(void)
         dma_init = true;
     }
 
-    uint32_t ctx_color = 9; // DMA_CHANNEL_PIXEL_RENDERER
+    uint32_t ctx_color = DMA_CHANNEL_PIXEL_RENDERER;
+    uint32_t color_offset = 0;
     if (color_data) {
-        pb_set_dma_address(&dma_color, color_data, 0xFFFFFFFF);
-        ctx_color = 20;
+        ctx_color = dma_color.ChannelID;
+        color_offset = (uint32_t)color_data & 0x07FFFFFF;
     }
 
-    uint32_t ctx_zeta = 10; // DMA_CHANNEL_DEPTH_STENCIL_RENDERER
+    uint32_t ctx_zeta = DMA_CHANNEL_DEPTH_STENCIL_RENDERER;
+    uint32_t depth_offset = 0;
     if (depth_data) {
-        pb_set_dma_address(&dma_depth, depth_data, 0xFFFFFFFF);
-        ctx_zeta = 21;
+        ctx_zeta = dma_depth.ChannelID;
+        depth_offset = (uint32_t)depth_data & 0x07FFFFFF;
     }
 
     uint32_t *p;
@@ -858,8 +891,8 @@ void gliFBOFlush(void)
     p = pb_push1(p,
                  NV097_SET_SURFACE_PITCH,
                  XGU_MASK(NV097_SET_SURFACE_PITCH_COLOR, pitch) | XGU_MASK(NV097_SET_SURFACE_PITCH_ZETA, zpitch));
-    p = pb_push1(p, NV097_SET_SURFACE_COLOR_OFFSET, 0);
-    p = pb_push1(p, NV097_SET_SURFACE_ZETA_OFFSET, 0);
+    p = pb_push1(p, NV097_SET_SURFACE_COLOR_OFFSET, color_offset);
+    p = pb_push1(p, NV097_SET_SURFACE_ZETA_OFFSET, depth_offset);
     p = pb_push1(p,
                  NV097_SET_SURFACE_CLIP_HORIZONTAL,
                  XGU_MASK(NV097_SET_SURFACE_CLIP_HORIZONTAL_WIDTH, clip_width) |
@@ -878,4 +911,5 @@ void gliFBOFlush(void)
     context->current_surface_format = format;
     context->current_surface_width = clip_width;
     context->current_surface_height = clip_height;
+    context->fbo_state_dirty = GL_FALSE;
 }
