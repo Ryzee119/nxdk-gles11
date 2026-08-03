@@ -851,10 +851,10 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         GLuint required_size;
         uint8_t required_levels;
         gliCalcMipmapChain(xgu_texture->data_width,
-                               xgu_texture->data_height,
-                               xgu_texture->bytes_per_pixel,
-                               &required_size,
-                               &required_levels);
+                           xgu_texture->data_height,
+                           xgu_texture->bytes_per_pixel,
+                           &required_size,
+                           &required_levels);
 
         if (level >= required_levels) {
             gliSetError(GL_INVALID_VALUE);
@@ -972,10 +972,10 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         GLuint required_size;
         uint8_t required_levels;
         gliCalcMipmapChain(xgu_texture->data_width,
-                               xgu_texture->data_height,
-                               xgu_texture->bytes_per_pixel,
-                               &required_size,
-                               &required_levels);
+                           xgu_texture->data_height,
+                           xgu_texture->bytes_per_pixel,
+                           &required_size,
+                           &required_levels);
         alloc_size = required_size;
         xgu_texture->mipmap_levels = required_levels;
     }
@@ -1162,9 +1162,15 @@ void gliTextureFlush(void)
         }
 
         // Update the texture metadata if needed
-        const XguTextureAddress u = gliEnumToNvAddressMode(texture_object->wrap_s);
-        const XguTextureAddress v = gliEnumToNvAddressMode(texture_object->wrap_t);
+        XguTextureAddress u = gliEnumToNvAddressMode(texture_object->wrap_s);
+        XguTextureAddress v = gliEnumToNvAddressMode(texture_object->wrap_t);
         const XguTextureAddress p = XGU_CLAMP_TO_EDGE;
+
+        // Linear textures are limited to edge clamp
+        if (!xgu_texture->swizzled) {
+            u = XGU_CLAMP_TO_EDGE;
+            v = XGU_CLAMP_TO_EDGE;
+        }
         const XguTexFilter min_filter = gliEnumToNvTexFilter(texture_object->min_filter);
         const XguTexFilter mag_filter = gliEnumToNvTexFilter(texture_object->mag_filter);
 

@@ -25,6 +25,7 @@ GL_API void GL_APIENTRY glFlush(void)
 
 void gliFlushStateChange(void)
 {
+    gliFBOFlush();
     gliTransformFlush();
     gliFogFlush();
     gliTextureFlush();
@@ -428,6 +429,10 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
 {
     gli_context_t *context = gliGetContext();
 
+    const uint32_t fmt_color = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_COLOR) >> 0;
+    const uint32_t fmt_zeta = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_ZETA) >> 4;
+    const uint32_t fmt_type = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_TYPE) >> 8;
+
     uint32_t nv_clear_mask = 0;
     if (mask & GL_COLOR_BUFFER_BIT) {
         nv_clear_mask |= NV097_CLEAR_SURFACE_COLOR;
@@ -439,12 +444,13 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
         nv_clear_mask |= NV097_CLEAR_SURFACE_STENCIL;
     }
 
+    if (fmt_zeta == NV097_SET_SURFACE_FORMAT_ZETA_Z16) {
+        nv_clear_mask &= ~NV097_CLEAR_SURFACE_STENCIL;
+    }
+
     if (!nv_clear_mask) {
         return;
     }
-
-    const uint32_t fmt_color = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_COLOR) >> 0;
-    const uint32_t fmt_zeta = (context->current_surface_format & NV097_SET_SURFACE_FORMAT_ZETA) >> 4;
 
     const DWORD nv_clear_color = gliColor4fToNvColor(fmt_color, context->framebuffer_control.clear_color);
     const DWORD nv_clear_zstencil = gliDepthStencilToNvZeta(
@@ -462,11 +468,22 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
     }
 
     uint32_t *pb = pb_begin();
+
+    if (fmt_type == NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE) {
+        uint32_t temp_format = context->current_surface_format & ~NV097_SET_SURFACE_FORMAT_TYPE;
+        temp_format |= XGU_MASK(NV097_SET_SURFACE_FORMAT_TYPE, NV097_SET_SURFACE_FORMAT_TYPE_PITCH);
+        pb = push_command_parameter(pb, NV097_SET_SURFACE_FORMAT, temp_format);
+    }
+
     pb = push_command_parameter(pb, NV097_SET_CLEAR_RECT_HORIZONTAL, ((sx + sw - 1) << 16) | sx);
     pb = push_command_parameter(pb, NV097_SET_CLEAR_RECT_VERTICAL, ((sy + sh - 1) << 16) | sy);
     pb = push_command_parameter(pb, NV097_SET_COLOR_CLEAR_VALUE, nv_clear_color);
     pb = push_command_parameter(pb, NV097_SET_ZSTENCIL_CLEAR_VALUE, nv_clear_zstencil);
     pb = push_command_parameter(pb, NV097_CLEAR_SURFACE, nv_clear_mask);
+
+    if (fmt_type == NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE) {
+        pb = push_command_parameter(pb, NV097_SET_SURFACE_FORMAT, context->current_surface_format);
+    }
     pb_end(pb);
 }
 
@@ -616,6 +633,12 @@ void glContextInit(GLint window_width, GLint window_height)
     context->implementation_limits.samples = 0;
     context->implementation_limits.compressed_texture_formats = NULL;
     context->implementation_limits.num_compressed_texture_formats = GLI_NUM_COMPRESSED_TEXTURE_FORMATS;
+    context->current_surface_width = window_width;
+    context->current_surface_height = window_height;
+    context->current_surface_format =
+        XGU_MASK(NV097_SET_SURFACE_FORMAT_COLOR, NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8) |
+        XGU_MASK(NV097_SET_SURFACE_FORMAT_ZETA, NV097_SET_SURFACE_FORMAT_ZETA_Z24S8) |
+        XGU_MASK(NV097_SET_SURFACE_FORMAT_TYPE, NV097_SET_SURFACE_FORMAT_TYPE_PITCH);
 
     /* --- Table 6.3: Current values --- */
     glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
@@ -654,16 +677,13 @@ void glContextInit(GLint window_width, GLint window_height)
 
     /* --- Table 6.7: Transformation state --- */
     /* Each stack starts with one identity matrix */
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
     context->transformation_state.modelview_matrix_stack_depth = 1;
     context->transformation_state.projection_matrix_stack_depth = 1;
     for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
         context->transformation_state.texture_matrix_stack_depth[u] = 1;
-    }
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-
-    for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
         glActiveTexture(GL_TEXTURE0 + u);
         glMatrixMode(GL_TEXTURE);
         glLoadIdentity();
@@ -827,8 +847,9 @@ void glContextInit(GLint window_width, GLint window_height)
     glClearDepthf(1.0f);
     glClearStencil(0);
 
-    gliFlushStateChange();
     gliStagingInit();
+
+    gliFlushStateChange();
     while (pb_busy()) {
     }
 }
