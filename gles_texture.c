@@ -1208,4 +1208,9 @@ void gliTextureFlush(void)
     }
 
     combiner_set_texture_env();
+
+    // After combiners have evaluated texture_unit_dirty, clear the flag
+    for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+        context->texture_environment.texture_units[i].texture_unit_dirty = GL_FALSE;
+    }
 }
