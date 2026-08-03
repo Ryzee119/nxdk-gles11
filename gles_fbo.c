@@ -794,13 +794,13 @@ void gliFBOFlush(void)
 
     // Resolve Color Attachment
     if (fbo->color.type == GL_TEXTURE_2D && fbo->color.texture && fbo->color.texture->texture_2d) {
-        xgu_texture_t *tex = (xgu_texture_t *)fbo->color.texture->texture_2d;
-        color_data = tex->data;
-        clip_width = tex->tex_width;
-        clip_height = tex->tex_height;
-        pitch = (tex->pitch + 63) & ~63;
+        xgu_texture_t *xgu_texture = (xgu_texture_t *)fbo->color.texture->texture_2d;
+        color_data = xgu_texture->data;
+        clip_width = xgu_texture->tex_width;
+        clip_height = xgu_texture->tex_height;
+        pitch = (xgu_texture->pitch + 63) & ~63;
 
-        switch (tex->format) {
+        switch (xgu_texture->format) {
             case XGU_TEXTURE_FORMAT_R5G6B5_SWIZZLED:
             case XGU_TEXTURE_FORMAT_R5G6B5:
                 fmt_color = NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5;
@@ -822,7 +822,7 @@ void gliFBOFlush(void)
                 return;
         }
 
-        if (tex->swizzled) {
+        if (xgu_texture->swizzled) {
             fmt_type = NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE;
         }
 
