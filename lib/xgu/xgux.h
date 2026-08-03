@@ -6,7 +6,8 @@
 #define XGUX_API static inline
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
-#define MAX_BATCH 120
+#define MAX_BATCH_ARRAYS 256
+#define MAX_BATCH_ELEMENTS 120
 
 XGUX_API
 void xgux_draw_arrays(XguPrimitiveType mode, unsigned int start, unsigned int count) {
@@ -18,8 +19,7 @@ void xgux_draw_arrays(XguPrimitiveType mode, unsigned int start, unsigned int co
         pb_end(p);
         p = pb_begin();
 
-        //FIXME: Maximum batch should be 256 elements maximum, will this work fine with all primitive types?
-        unsigned int batch_count = MIN(count, MAX_BATCH);
+        unsigned int batch_count = MIN(count, MAX_BATCH_ARRAYS);
         p = xgu_draw_arrays(p, start, batch_count);
 
         start += batch_count;
@@ -43,7 +43,7 @@ void xgux_draw_elements16(XguPrimitiveType mode, const uint16_t* elements, unsig
         pb_end(p);
         p = pb_begin();
 
-        unsigned int batch_pair_count = MIN(pair_count - i, MAX_BATCH);
+        unsigned int batch_pair_count = MIN(pair_count - i, MAX_BATCH_ELEMENTS);
         p = xgu_element16(p, &elements[i * 2], batch_pair_count * 2);
 
         i += batch_pair_count;
@@ -71,7 +71,7 @@ void xgux_draw_elements32(XguPrimitiveType mode, const uint32_t* elements, unsig
         pb_end(p);
         p = pb_begin();
 
-        unsigned int batch_count = MIN(count, MAX_BATCH);
+        unsigned int batch_count = MIN(count, MAX_BATCH_ELEMENTS);
         p = xgu_element32(p, elements, batch_count);
 
         elements += batch_count;
