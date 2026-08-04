@@ -599,7 +599,7 @@ void combiner_set_texture_env(void)
         const GLboolean is_point_sprite =
             texture_unit->coord_replace_oes_enabled && context->rasterization_state.point_sprite_oes_enabled;
         if (is_point_sprite) {
-             // Point sprites must be on stage 3. Let's just warn about it for now.
+            // Point sprites must be on stage 3. Let's just warn about it for now.
             if (i != 3) {
                 gliDebugF("Point sprite texture unit %u must be on texture unit 3\n", i);
             }
@@ -950,18 +950,21 @@ void combiner_set_texture_env(void)
     // Push passthroughs to all unused stages
     pb = pb_begin();
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
-        if (shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE) {
+        if (shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE ||
+            shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE) {
             DWORD STAGE_INPUT = (i == 0) ? REG_COLOR0 : REG_SPARE0;
             DWORD RGB_IN = 0;
             DWORD RGB_OUT = 0;
             DWORD ALPHA_IN = 0;
             DWORD ALPHA_OUT = 0;
 
-            shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH;
+            if (shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE) {
+                shader_program[i] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PASS_THROUGH;
 
-            // Ensure texture control is disabled for this unused stage
-            // (e.g. if it was previously used for clip planes and left enabled)
-            pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (i * 64), 0);
+                // Ensure texture control is disabled for this unused stage
+                // (e.g. if it was previously used for clip planes and left enabled)
+                pb = pb_push1(pb, NV097_SET_TEXTURE_CONTROL0 + (i * 64), 0);
+            }
 
             // Color: out.rgb = STAGE_INPUT * 1
             // Alpha: out.a = STAGE_INPUT.a * 1
