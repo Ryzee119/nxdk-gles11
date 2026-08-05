@@ -12,6 +12,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Vertex Buffer Objects (VBOs)
 * [x] Frame Buffer Objects (FBOs)
 * [x] Point Sprites
+* [x] Subtractive Blending
 * [x] Clip Planes
 * [x] Alpha/Depth/Stencil Functions
 * [x] Automatic client-side array staging (malloc/stack memory)

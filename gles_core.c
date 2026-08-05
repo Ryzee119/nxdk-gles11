@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES
 #include "gles_private.h"
 #include <string.h>
 #include <xmmintrin.h>
@@ -844,6 +845,7 @@ void glContextInit(GLint window_width, GLint window_height)
     glDepthFunc(GL_LESS);
     glDisable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ZERO);
+    glBlendEquationOES(GL_FUNC_ADD_OES);
     glDisable(GL_COLOR_LOGIC_OP);
     glLogicOp(GL_COPY);
     glEnable(GL_DITHER);

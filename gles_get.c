@@ -323,6 +323,10 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             *element_type = GLI_INT;
             *element_count = 1;
             return &context->pixel_ops_state.blend_dst;
+        case GL_BLEND_EQUATION_OES:
+            *element_type = GLI_INT;
+            *element_count = 1;
+            return &context->pixel_ops_state.blend_equation;
         case GL_BLEND_SRC:
             // params returns one value, the symbolic constant identifying the source blend function. See glBlendFunc.
             *element_type = GLI_INT;

@@ -34,9 +34,9 @@ extern "C" {
 #define GL_KHR_debug 0
 #define GL_OES_EGL_image 0
 #define GL_OES_EGL_image_external 0
-#define GL_OES_blend_equation_separate 0
+//#define GL_OES_blend_equation_separate 0
 #define GL_OES_blend_func_separate 0
-#define GL_OES_blend_subtract 0
+//#define GL_OES_blend_subtract 0
 #define GL_OES_byte_coordinates 0
 #define GL_OES_compressed_ETC1_RGB8_sub_texture 0
 #define GL_OES_compressed_ETC1_RGB8_texture 0
