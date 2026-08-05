@@ -683,12 +683,12 @@ void glContextInit(GLint window_width, GLint window_height)
     context->buffer_objects = NULL;
 
     /* --- Table 6.7: Transformation state --- */
+    context->transformation_state.modelview_matrix_stack_depth = 1;
+    context->transformation_state.projection_matrix_stack_depth = 1;
+
     /* Each stack starts with one identity matrix */
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-
-    context->transformation_state.modelview_matrix_stack_depth = 1;
-    context->transformation_state.projection_matrix_stack_depth = 1;
     for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
         context->transformation_state.texture_matrix_stack_depth[u] = 1;
         glActiveTexture(GL_TEXTURE0 + u);
