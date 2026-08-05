@@ -208,6 +208,10 @@ XguStencilOp gliEnumToNvStencilOp(GLenum op)
             return XGU_STENCIL_OP_INCRSAT;
         case GL_DECR:
             return XGU_STENCIL_OP_DECRSAT;
+        case GL_INCR_WRAP_OES:
+            return XGU_STENCIL_OP_INCR;
+        case GL_DECR_WRAP_OES:
+            return XGU_STENCIL_OP_DECR;
         case GL_INVERT:
             return XGU_STENCIL_OP_INVERT;
         default:

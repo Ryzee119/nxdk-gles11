@@ -20,6 +20,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Point Sprites (`GL_OES_point_sprite`)
 * [x] Subtractive Blending (`GL_OES_blend_subtract`, `GL_OES_blend_equation_separate`)
 * [x] Mirrored Repeat (`GL_OES_texture_mirrored_repeat`)
+* [x] Stencil Wrap (`GL_OES_stencil_wrap`)
 * [x] 32-bit Indices (`GL_OES_element_index_uint`)
 * [x] Point Size Arrays (`GL_OES_point_size_array`)
 

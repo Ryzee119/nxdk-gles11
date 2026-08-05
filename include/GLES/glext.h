@@ -58,8 +58,8 @@ extern "C" {
 #define GL_OES_single_precision 0
 #define GL_OES_stencil1 0
 #define GL_OES_stencil4 0
-// #define GL_OES_stencil8 0
-#define GL_OES_stencil_wrap 0
+#define GL_OES_stencil8 0
+//#define GL_OES_stencil_wrap 0
 #define GL_OES_surfaceless_context 0
 #define GL_OES_texture_cube_map 0
 #define GL_OES_texture_env_crossbar 0
