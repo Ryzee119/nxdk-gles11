@@ -911,8 +911,6 @@ GLuint gliFormatToBpp(GLenum format)
         case GL_RGBA4_OES:
         case GL_DEPTH_COMPONENT16_OES:
             return 2;
-        case GL_STENCIL_INDEX8_OES:
-            return 1;
         default:
             return 0;
     }
