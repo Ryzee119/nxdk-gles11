@@ -350,7 +350,6 @@ GL_API void GL_APIENTRY glRenderbufferStorageOES(GLenum target, GLenum internalf
     switch (internalformat) {
         case GL_DEPTH_COMPONENT16_OES:
         case GL_DEPTH_COMPONENT24_OES:
-        case GL_STENCIL_INDEX8_OES:
         case GL_DEPTH24_STENCIL8_OES:
             // All depth/stencil formats are promoted to 24-bit depth with packed 8 bit stencil for xbox
             internalformat = GL_DEPTH24_STENCIL8_OES;
@@ -714,7 +713,7 @@ GL_API void GL_APIENTRY glGetRenderbufferParameterivOES(GLenum target, GLenum pn
             }
             break;
         case GL_RENDERBUFFER_STENCIL_SIZE_OES:
-            if (rbo->internalformat == GL_STENCIL_INDEX8_OES || rbo->internalformat == GL_DEPTH24_STENCIL8_OES) {
+            if (rbo->internalformat == GL_DEPTH24_STENCIL8_OES) {
                 *params = 8;
             } else {
                 *params = 0;
