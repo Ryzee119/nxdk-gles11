@@ -239,14 +239,14 @@ GL_API void GL_APIENTRY glTexParameteriv(GLenum target, GLenum pname, const GLin
             texture_object->mag_filter = params[0];
             break;
         case GL_TEXTURE_WRAP_S:
-            if (params[0] != GL_CLAMP_TO_EDGE && params[0] != GL_REPEAT) {
+            if (params[0] != GL_CLAMP_TO_EDGE && params[0] != GL_REPEAT && params[0] != GL_MIRRORED_REPEAT_OES) {
                 gliSetError(GL_INVALID_ENUM);
                 return;
             }
             texture_object->wrap_s = params[0];
             break;
         case GL_TEXTURE_WRAP_T:
-            if (params[0] != GL_CLAMP_TO_EDGE && params[0] != GL_REPEAT) {
+            if (params[0] != GL_CLAMP_TO_EDGE && params[0] != GL_REPEAT && params[0] != GL_MIRRORED_REPEAT_OES) {
                 gliSetError(GL_INVALID_ENUM);
                 return;
             }

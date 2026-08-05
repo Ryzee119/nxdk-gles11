@@ -264,6 +264,8 @@ XguTextureAddress gliEnumToNvAddressMode(GLenum wrap)
             return XGU_WRAP;
         case GL_CLAMP_TO_EDGE:
             return XGU_CLAMP_TO_EDGE;
+        case GL_MIRRORED_REPEAT_OES:
+            return XGU_MIRROR;
         default:
             return (XguTextureAddress)-1;
     }

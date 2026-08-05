@@ -63,7 +63,7 @@ extern "C" {
 #define GL_OES_surfaceless_context 0
 #define GL_OES_texture_cube_map 0
 #define GL_OES_texture_env_crossbar 0
-#define GL_OES_texture_mirrored_repeat 0
+//#define GL_OES_texture_mirrored_repeat 0
 //#define GL_OES_texture_npot 0
 #define GL_OES_vertex_array_object 0
 #define GL_AMD_compressed_3DC_texture 0
