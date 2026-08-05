@@ -7,7 +7,7 @@
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX_BATCH_ARRAYS 256
-#define MAX_BATCH_ELEMENTS 120
+#define MAX_BATCH_ELEMENTS 2046
 
 XGUX_API
 void xgux_draw_arrays(XguPrimitiveType mode, unsigned int start, unsigned int count) {

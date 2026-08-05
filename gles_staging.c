@@ -205,14 +205,28 @@ GLsizei gliScanMaxIndex(GLenum type, const void *indices, GLsizei count)
     GLsizei max_idx = 0;
     if (type == GL_UNSIGNED_BYTE) {
         const uint8_t *idx = (const uint8_t *)indices;
-        for (GLsizei i = 0; i < count; i++) {
+        GLsizei i = 0;
+        for (; i + 3 < count; i += 4) {
+            if (idx[i] > max_idx) max_idx = idx[i];
+            if (idx[i + 1] > max_idx) max_idx = idx[i + 1];
+            if (idx[i + 2] > max_idx) max_idx = idx[i + 2];
+            if (idx[i + 3] > max_idx) max_idx = idx[i + 3];
+        }
+        for (; i < count; i++) {
             if (idx[i] > max_idx) {
                 max_idx = idx[i];
             }
         }
     } else if (type == GL_UNSIGNED_SHORT) {
         const uint16_t *idx = (const uint16_t *)indices;
-        for (GLsizei i = 0; i < count; i++) {
+        GLsizei i = 0;
+        for (; i + 3 < count; i += 4) {
+            if (idx[i] > max_idx) max_idx = idx[i];
+            if (idx[i + 1] > max_idx) max_idx = idx[i + 1];
+            if (idx[i + 2] > max_idx) max_idx = idx[i + 2];
+            if (idx[i + 3] > max_idx) max_idx = idx[i + 3];
+        }
+        for (; i < count; i++) {
             if (idx[i] > max_idx) {
                 max_idx = idx[i];
             }
@@ -221,7 +235,14 @@ GLsizei gliScanMaxIndex(GLenum type, const void *indices, GLsizei count)
 #ifdef GL_OES_element_index_uint
     else if (type == GL_UNSIGNED_INT) {
         const uint32_t *idx = (const uint32_t *)indices;
-        for (GLsizei i = 0; i < count; i++) {
+        GLsizei i = 0;
+        for (; i + 3 < count; i += 4) {
+            if (idx[i] > max_idx) max_idx = (GLsizei)idx[i];
+            if (idx[i + 1] > max_idx) max_idx = (GLsizei)idx[i + 1];
+            if (idx[i + 2] > max_idx) max_idx = (GLsizei)idx[i + 2];
+            if (idx[i + 3] > max_idx) max_idx = (GLsizei)idx[i + 3];
+        }
+        for (; i < count; i++) {
             if ((GLsizei)idx[i] > max_idx) {
                 max_idx = (GLsizei)idx[i];
             }
