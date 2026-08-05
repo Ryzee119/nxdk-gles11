@@ -346,11 +346,11 @@ void gliTransformFlush(void)
             GLsizei h = c->transformation_state.viewport[3];
 
             GLfloat translate_x = x + (w / 2.0f);
-            GLfloat translate_y = y + (h / 2.0f);
+            GLfloat translate_y = c->current_surface_height - y - (h / 2.0f);
             GLfloat translate_z = zsize / 2.0f;
             GLfloat scale_x = w / 2.0f;
-            // When we render to a texture memory buffer via an FBO we don't flip Y-axis
-            GLfloat scale_y = (c->fbo_binding != 0) ? (h / 2.0f) : (h / -2.0f);
+            // Always flip Y-axis (both screen and FBO) to match OpenGL coordinate space natively
+            GLfloat scale_y = (h / -2.0f);
             GLfloat scale_z = zsize / 2.0f;
             GLfloat scale_w = 1.0f;
 

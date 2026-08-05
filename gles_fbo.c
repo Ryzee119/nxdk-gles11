@@ -761,12 +761,6 @@ void gliFBOFlush(void)
                       XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_HEIGHT, context->current_surface_height) |
                           XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_Y, 0));
         pb = pb_push1(pb, NV097_SET_SURFACE_FORMAT, context->current_surface_format);
-
-        // Restore front face direction since FBO != 0 flipped it
-        pb = pb_push1(pb,
-                      NV097_SET_FRONT_FACE,
-                      (context->rasterization_state.cull_front_face == GL_CCW) ? NV097_SET_FRONT_FACE_V_CCW
-                                                                               : NV097_SET_FRONT_FACE_V_CW);
         pb_end(pb);
         context->fbo_state_dirty = GL_FALSE;
         return;
@@ -902,10 +896,6 @@ void gliFBOFlush(void)
                  XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_HEIGHT, clip_height) |
                      XGU_MASK(NV097_SET_SURFACE_CLIP_VERTICAL_Y, 0));
     p = pb_push1(p, NV097_SET_SURFACE_FORMAT, format);
-    p = pb_push1(p,
-                 NV097_SET_FRONT_FACE,
-                 (context->rasterization_state.cull_front_face == GL_CCW) ? NV097_SET_FRONT_FACE_V_CW
-                                                                          : NV097_SET_FRONT_FACE_V_CCW);
     pb_end(p);
 
     context->current_surface_format = format;
