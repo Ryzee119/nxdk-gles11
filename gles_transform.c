@@ -422,7 +422,8 @@ void gliTransformFlush(void)
             // Upload to hardware
             uint32_t *pb = pb_begin();
             pb = xgu_set_texture_matrix_enable(pb, i, true);
-            pb = xgu_set_texture_matrix(pb, i, (const float *)texture_matrix);
+            pb = pb_push_transposed_matrix(
+                pb, NV097_SET_TEXTURE_MATRIX + i * (4 * 4) * 4, (const float *)texture_matrix);
             pb_end(pb);
         }
     }
