@@ -241,7 +241,11 @@ GL_API void GL_APIENTRY glMaterialfv(GLenum face, GLenum pname, const GLfloat *p
                     return;
                 }
                 material[i]->shininess = params[0];
-                xgux_set_specular_gl(material[i]->shininess);
+                if (i == 0) {
+                    xgux_set_specular_gl(material[i]->shininess);
+                } else {
+                    xgux_set_back_specular_gl(material[i]->shininess);
+                }
                 break;
             case GL_AMBIENT_AND_DIFFUSE:
                 glm_vec4_copy((float *)params, material[i]->ambient);
