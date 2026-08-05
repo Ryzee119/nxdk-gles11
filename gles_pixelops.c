@@ -15,9 +15,11 @@ GL_API void GL_APIENTRY glAlphaFunc(GLenum func, GLfloat ref)
     context->pixel_ops_state.alpha_test_func = func;
     context->pixel_ops_state.alpha_test_ref = ref;
 
+    uint8_t hw_ref = (uint8_t)(ref * 255.0f);
+
     uint32_t *pb = pb_begin();
     pb = xgu_set_alpha_func(pb, xgu_func);
-    pb = xgu_set_alpha_ref(pb, ref);
+    pb = xgu_set_alpha_ref(pb, hw_ref);
     pb_end(pb);
 }
 
