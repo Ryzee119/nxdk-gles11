@@ -50,6 +50,33 @@ GL_API void GL_APIENTRY glBlendFunc(GLenum sfactor, GLenum dfactor)
     pb_end(pb);
 }
 
+GL_API void GL_APIENTRY glBlendEquationOES(GLenum mode)
+{
+    gli_context_t *context = gliGetContext();
+    XguBlendEquation eq;
+
+    switch (mode) {
+        case GL_FUNC_ADD_OES:
+            eq = NV097_SET_BLEND_EQUATION_V_FUNC_ADD;
+            break;
+        case GL_FUNC_SUBTRACT_OES:
+            eq = NV097_SET_BLEND_EQUATION_V_FUNC_SUBTRACT;
+            break;
+        case GL_FUNC_REVERSE_SUBTRACT_OES:
+            eq = NV097_SET_BLEND_EQUATION_V_FUNC_REVERSE_SUBTRACT;
+            break;
+        default:
+            gliSetError(GL_INVALID_ENUM);
+            return;
+    }
+
+    context->pixel_ops_state.blend_equation = mode;
+
+    uint32_t *pb = pb_begin();
+    pb = xgu_set_blend_equation(pb, eq);
+    pb_end(pb);
+}
+
 GL_API void GL_APIENTRY glDepthFunc(GLenum func)
 {
     gli_context_t *context = gliGetContext();

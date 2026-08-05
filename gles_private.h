@@ -369,6 +369,7 @@ typedef struct
     GLboolean blend_enabled;
     GLenum blend_src;
     GLenum blend_dst;
+    GLenum blend_equation;
 
     GLboolean dither_enabled;
 
