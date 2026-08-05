@@ -272,12 +272,19 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
                 // Can't disable so max it out
                 pb = xgu_set_scissor_rect(pb, false, 0, 0, 4095, 4095);
             } else {
+                GLint hw_x = context->pixel_ops_state.scissor_box[0];
+                GLint hw_y = context->pixel_ops_state.scissor_box[1];
+                GLint hw_w = context->pixel_ops_state.scissor_box[2];
+                GLint hw_h = context->pixel_ops_state.scissor_box[3];
+
+                gliCalculateHardwareScissor(context, &hw_x, &hw_y, &hw_w, &hw_h);
+
                 pb = xgu_set_scissor_rect(pb,
                                           false,
-                                          context->pixel_ops_state.scissor_box[0],
-                                          context->pixel_ops_state.scissor_box[1],
-                                          context->pixel_ops_state.scissor_box[2],
-                                          context->pixel_ops_state.scissor_box[3]);
+                                          hw_x,
+                                          hw_y,
+                                          hw_w,
+                                          hw_h);
             }
             break;
         case GL_STENCIL_TEST:
@@ -465,6 +472,8 @@ GL_API void GL_APIENTRY glClear(GLbitfield mask)
         sy = context->pixel_ops_state.scissor_box[1];
         sw = context->pixel_ops_state.scissor_box[2];
         sh = context->pixel_ops_state.scissor_box[3];
+
+        gliCalculateHardwareScissor(context, &sx, &sy, &sw, &sh);
     }
 
     uint32_t *pb = pb_begin();

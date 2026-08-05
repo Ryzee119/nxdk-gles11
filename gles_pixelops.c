@@ -113,6 +113,29 @@ GL_API void GL_APIENTRY glStencilOp(GLenum fail, GLenum zfail, GLenum zpass)
     pb_end(pb);
 }
 
+void gliCalculateHardwareScissor(gli_context_t *context, GLint *sx, GLint *sy, GLint *sw, GLint *sh)
+{
+    GLint hw_y = context->current_surface_height - *sy - *sh;
+    GLint hw_h = *sh;
+
+    // Clamp top
+    if (hw_y < 0) {
+        hw_h += hw_y;
+        hw_y = 0;
+    }
+
+    // Clamp bounds
+    hw_y = GLI_CLAMP(hw_y, 0, 4095);
+    GLint hw_x = GLI_CLAMP(*sx, 0, 4095);
+    GLint hw_w = GLI_CLAMP(*sw, 0, 4095 - hw_x);
+    hw_h = GLI_CLAMP(hw_h, 0, 4095 - hw_y);
+
+    *sx = hw_x;
+    *sy = hw_y;
+    *sw = hw_w;
+    *sh = hw_h;
+}
+
 GL_API void GL_APIENTRY glScissor(GLint x, GLint y, GLsizei w, GLsizei h)
 {
     gli_context_t *context = gliGetContext();
@@ -122,11 +145,6 @@ GL_API void GL_APIENTRY glScissor(GLint x, GLint y, GLsizei w, GLsizei h)
         return;
     }
 
-    x = GLI_CLAMP(x, 0, 4095);
-    y = GLI_CLAMP(y, 0, 4095);
-    w = GLI_CLAMP(w, 0, 4095 - x);
-    h = GLI_CLAMP(h, 0, 4095 - y);
-
     context->pixel_ops_state.scissor_box[0] = x;
     context->pixel_ops_state.scissor_box[1] = y;
     context->pixel_ops_state.scissor_box[2] = w;
@@ -134,8 +152,15 @@ GL_API void GL_APIENTRY glScissor(GLint x, GLint y, GLsizei w, GLsizei h)
 
     // Only push if scissor test is enabled
     if (context->pixel_ops_state.scissor_test_enabled) {
+        GLint hw_x = x;
+        GLint hw_y = y;
+        GLint hw_w = w;
+        GLint hw_h = h;
+
+        gliCalculateHardwareScissor(context, &hw_x, &hw_y, &hw_w, &hw_h);
+
         uint32_t *pb = pb_begin();
-        pb = xgu_set_scissor_rect(pb, false, x, y, w, h);
+        pb = xgu_set_scissor_rect(pb, false, hw_x, hw_y, hw_w, hw_h);
         pb_end(pb);
     }
 }
