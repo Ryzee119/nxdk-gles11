@@ -4,18 +4,23 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 ![Screenshot1](/.github/image.png?)
 
 ## Features
+### Core
 * [x] All ES1.1 primitives
 * [x] Fog
 * [x] Lighting
 * [x] Textures (Including NPOT)
 * [x] Mipmaps
 * [x] Vertex Buffer Objects (VBOs)
-* [x] Frame Buffer Objects (FBOs)
-* [x] Point Sprites
-* [x] Subtractive Blending
 * [x] Clip Planes
 * [x] Alpha/Depth/Stencil Functions
 * [x] Automatic client-side array staging (malloc/stack memory)
+
+### Extensions
+* [x] Frame Buffer Objects (FBOs) (`GL_OES_framebuffer_object`)
+* [x] Point Sprites (`GL_OES_point_sprite`)
+* [x] Subtractive Blending (`GL_OES_blend_subtract`, `GL_OES_blend_equation_separate`)
+* [x] 32-bit Indices (`GL_OES_element_index_uint`)
+* [x] Point Size Arrays (`GL_OES_point_size_array`)
 
 ## How to use
 ### CMake
