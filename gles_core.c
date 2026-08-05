@@ -13,15 +13,12 @@ GL_API void GL_APIENTRY glFinish(void)
     glFlush();
     while (pb_busy())
         ;
-    while (pb_finished())
-        ;
 }
 
 GL_API void GL_APIENTRY glFlush(void)
 {
-    uint32_t *pb = pb_begin();
-    pb = pb_push1(pb, NV097_WAIT_FOR_IDLE, 0);
-    pb_end(pb);
+    // pbkit always flushes the push buffer on pb_end() calls.
+    return;
 }
 
 void gliFlushStateChange(void)
