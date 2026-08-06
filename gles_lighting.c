@@ -457,47 +457,49 @@ void gliLightingFlush(void)
     material_t *materials[2] = {&lighting->material_front, &lighting->material_back};
 
     // github.com/abaire/nxdk_pgraph_tests/blob/5920c89548e47675f28c7e347f07fc3ee54a4709/src/tests/material_color_tests.cpp
-    uint32_t *pb = pb_begin();
-    for (GLint i = 0; i < 2; i++) {
-        material_t *material = materials[i];
+    if (materials[0]->material_dirty || materials[1]->material_dirty || lighting->lighting_model_dirty) {
+        uint32_t *pb = pb_begin();
+        for (GLint i = 0; i < 2; i++) {
+            material_t *material = materials[i];
 
-        if (!material->material_dirty && !lighting->lighting_model_dirty) {
-            continue;
+            if (!material->material_dirty && !lighting->lighting_model_dirty) {
+                continue;
+            }
+
+            vec3 ambient;
+            vec3 emission;
+            if (!lighting->color_material_enabled) {
+                ambient[0] = lighting->light_model_ambient[0] * material->ambient[0] + material->emission[0];
+                ambient[1] = lighting->light_model_ambient[1] * material->ambient[1] + material->emission[1];
+                ambient[2] = lighting->light_model_ambient[2] * material->ambient[2] + material->emission[2];
+
+                emission[0] = 0.0f;
+                emission[1] = 0.0f;
+                emission[2] = 0.0f;
+            } else {
+                // material ambient comes from vertex color so dont add them here
+                // In this case the emission register is used?
+                ambient[0] = material->emission[0];
+                ambient[1] = material->emission[1];
+                ambient[2] = material->emission[2];
+
+                emission[0] = lighting->light_model_ambient[0];
+                emission[1] = lighting->light_model_ambient[1];
+                emission[2] = lighting->light_model_ambient[2];
+            }
+
+            if (i == 0) {
+                pb = xgu_set_scene_ambient_color(pb, ambient[0], ambient[1], ambient[2]);
+                pb = xgu_set_material_emission(pb, emission[0], emission[1], emission[2]);
+                pb = xgu_set_material_alpha(pb, material->diffuse[3]);
+            } else {
+                pb = xgu_set_back_scene_ambient_color(pb, ambient[0], ambient[1], ambient[2]);
+                pb = xgu_set_back_material_emission(pb, emission[0], emission[1], emission[2]);
+                pb = xgu_set_back_material_alpha(pb, material->diffuse[3]);
+            }
         }
-
-        vec3 ambient;
-        vec3 emission;
-        if (!lighting->color_material_enabled) {
-            ambient[0] = lighting->light_model_ambient[0] * material->ambient[0] + material->emission[0];
-            ambient[1] = lighting->light_model_ambient[1] * material->ambient[1] + material->emission[1];
-            ambient[2] = lighting->light_model_ambient[2] * material->ambient[2] + material->emission[2];
-
-            emission[0] = 0.0f;
-            emission[1] = 0.0f;
-            emission[2] = 0.0f;
-        } else {
-            // material ambient comes from vertex color so dont add them here
-            // In this case the emission register is used?
-            ambient[0] = material->emission[0];
-            ambient[1] = material->emission[1];
-            ambient[2] = material->emission[2];
-
-            emission[0] = lighting->light_model_ambient[0];
-            emission[1] = lighting->light_model_ambient[1];
-            emission[2] = lighting->light_model_ambient[2];
-        }
-
-        if (i == 0) {
-            pb = xgu_set_scene_ambient_color(pb, ambient[0], ambient[1], ambient[2]);
-            pb = xgu_set_material_emission(pb, emission[0], emission[1], emission[2]);
-            pb = xgu_set_material_alpha(pb, material->diffuse[3]);
-        } else {
-            pb = xgu_set_back_scene_ambient_color(pb, ambient[0], ambient[1], ambient[2]);
-            pb = xgu_set_back_material_emission(pb, emission[0], emission[1], emission[2]);
-            pb = xgu_set_back_material_alpha(pb, material->diffuse[3]);
-        }
+        pb_end(pb);
     }
-    pb_end(pb);
 
     static uint32_t light_mask;
 
@@ -515,6 +517,7 @@ void gliLightingFlush(void)
         }
 
         if (light->light_dirty || lighting->lighting_model_dirty) {
+            lighting->light_mask_dirty = GL_TRUE;
             // If w == 0, it's a directional light
             if (light->position[3] == 0) {
                 light_mask &= ~(0x03 << light_mask_shift);
@@ -534,7 +537,7 @@ void gliLightingFlush(void)
                 glm_vec3_add(L, V, H);
                 glm_vec3_normalize(H);
 
-                pb = pb_begin();
+                uint32_t *pb = pb_begin();
                 pb = xgu_set_light_local_range(pb, i, FLT_MAX);
                 pb = xgu_set_light_infinite_half_vector(pb, i, (XguVec3){H[0], H[1], H[2]});
                 pb = xgu_set_light_infinite_direction(pb, i, (XguVec3){L[0], L[1], L[2]});
@@ -545,7 +548,7 @@ void gliLightingFlush(void)
                 light_mask |= (light->spot_cutoff == 180.0f) ? (XGU_LMASK_LOCAL << light_mask_shift)
                                                              : (XGU_LMASK_SPOT << light_mask_shift);
 
-                pb = pb_begin();
+                uint32_t *pb = pb_begin();
                 pb = xgu_set_light_local_range(pb, i, FLT_MAX); // FIXME: Calculate range based on attenuation?
                 pb = xgu_set_light_local_position(
                     pb, i, (XguVec3){light->position[0], light->position[1], light->position[2]});
@@ -567,65 +570,71 @@ void gliLightingFlush(void)
         }
 
         XguVec3 xgu_v;
-        pb = pb_begin();
-        for (int j = 0; j < 2; j++) {
-            material_t *material = materials[j];
-            if (!light->light_dirty && !material->material_dirty) {
-                continue;
-            }
+        if (light->light_dirty || materials[0]->material_dirty || materials[1]->material_dirty ||
+            lighting->color_material_enabled) {
+            uint32_t *pb = pb_begin();
+            for (int j = 0; j < 2; j++) {
+                material_t *material = materials[j];
+                if (!light->light_dirty && !material->material_dirty) {
+                    continue;
+                }
 
-            // Apply light colour and material color
-            if (!lighting->color_material_enabled) {
-                xgu_v.r = light->diffuse[0] * material->diffuse[0];
-                xgu_v.g = light->diffuse[1] * material->diffuse[1];
-                xgu_v.b = light->diffuse[2] * material->diffuse[2];
-            } else {
-                // Material diffuse comes from vertex color
-                xgu_v.r = light->diffuse[0];
-                xgu_v.g = light->diffuse[1];
-                xgu_v.b = light->diffuse[2];
-            }
-            if (j == 0) {
-                pb = xgu_set_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
-            } else {
-                pb = xgu_set_back_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
-            }
+                // Apply light colour and material color
+                if (!lighting->color_material_enabled) {
+                    xgu_v.r = light->diffuse[0] * material->diffuse[0];
+                    xgu_v.g = light->diffuse[1] * material->diffuse[1];
+                    xgu_v.b = light->diffuse[2] * material->diffuse[2];
+                } else {
+                    // Material diffuse comes from vertex color
+                    xgu_v.r = light->diffuse[0];
+                    xgu_v.g = light->diffuse[1];
+                    xgu_v.b = light->diffuse[2];
+                }
+                if (j == 0) {
+                    pb = xgu_set_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                } else {
+                    pb = xgu_set_back_light_diffuse_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                }
 
-            // Light ambient
-            if (!lighting->color_material_enabled) {
-                xgu_v.r = light->ambient[0] * material->ambient[0];
-                xgu_v.g = light->ambient[1] * material->ambient[1];
-                xgu_v.b = light->ambient[2] * material->ambient[2];
-            } else {
-                xgu_v.r = light->ambient[0];
-                xgu_v.g = light->ambient[1];
-                xgu_v.b = light->ambient[2];
-            }
-            if (j == 0) {
-                pb = xgu_set_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
-            } else {
-                pb = xgu_set_back_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
-            }
+                // Light ambient
+                if (!lighting->color_material_enabled) {
+                    xgu_v.r = light->ambient[0] * material->ambient[0];
+                    xgu_v.g = light->ambient[1] * material->ambient[1];
+                    xgu_v.b = light->ambient[2] * material->ambient[2];
+                } else {
+                    xgu_v.r = light->ambient[0];
+                    xgu_v.g = light->ambient[1];
+                    xgu_v.b = light->ambient[2];
+                }
+                if (j == 0) {
+                    pb = xgu_set_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                } else {
+                    pb = xgu_set_back_light_ambient_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                }
 
-            // Light specular and material specular
-            xgu_v.r = light->specular[0] * material->specular[0];
-            xgu_v.g = light->specular[1] * material->specular[1];
-            xgu_v.b = light->specular[2] * material->specular[2];
-            if (j == 0) {
-                pb = xgu_set_light_specular_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
-            } else {
-                pb = xgu_set_back_light_specular_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                // Light specular and material specular
+                xgu_v.r = light->specular[0] * material->specular[0];
+                xgu_v.g = light->specular[1] * material->specular[1];
+                xgu_v.b = light->specular[2] * material->specular[2];
+                if (j == 0) {
+                    pb = xgu_set_light_specular_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                } else {
+                    pb = xgu_set_back_light_specular_color(pb, i, xgu_v.r, xgu_v.g, xgu_v.b);
+                }
+                pb_end(pb);
             }
         }
-        pb_end(pb);
         light->light_dirty = GL_FALSE;
     }
     materials[0]->material_dirty = GL_FALSE;
     materials[1]->material_dirty = GL_FALSE;
 
-    pb = pb_begin();
-    pb = push_command_parameter(pb, NV097_SET_LIGHT_ENABLE_MASK, light_mask);
-    pb_end(pb);
+    if (lighting->light_mask_dirty) {
+        uint32_t *pb = pb_begin();
+        pb = push_command_parameter(pb, NV097_SET_LIGHT_ENABLE_MASK, light_mask);
+        pb_end(pb);
+        lighting->light_mask_dirty = GL_FALSE;
+    }
 
     if (lighting->lighting_model_dirty) {
         uint32_t *pb = pb_begin();

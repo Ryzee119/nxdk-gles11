@@ -258,6 +258,7 @@ typedef struct
     material_t material_back;
 
     GLboolean lighting_model_dirty;
+    GLboolean light_mask_dirty;
     GLboolean color_material_enabled;
     vec4 light_model_ambient;
     GLboolean light_model_two_side;

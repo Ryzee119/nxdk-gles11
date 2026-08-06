@@ -183,11 +183,15 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             pb = combiner_specular_fog_config(
                 pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
             break;
-        case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS - 1:
+        case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS - 1: {
             // If enabled, include light i in the evaluation of the lighting equation. See glLightModel and glLight.
             const GLuint light = cap - GL_LIGHT0;
-            context->lighting_state.lights[light].enabled = enable;
+            if (context->lighting_state.lights[light].enabled != enable) {
+                context->lighting_state.lights[light].enabled = enable;
+                context->lighting_state.light_mask_dirty = GL_TRUE;
+            }
             break;
+        }
         case GL_LIGHTING:
             // If enabled, use the current lighting parameters to compute the vertex color. Otherwise, simply associate
             // the current color with each vertex. See glMaterial, glLightModel, and glLight.
@@ -277,12 +281,7 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
 
                 gliCalculateHardwareScissor(context, &hw_x, &hw_y, &hw_w, &hw_h);
 
-                pb = xgu_set_scissor_rect(pb,
-                                          false,
-                                          hw_x,
-                                          hw_y,
-                                          hw_w,
-                                          hw_h);
+                pb = xgu_set_scissor_rect(pb, false, hw_x, hw_y, hw_w, hw_h);
             }
             break;
         case GL_STENCIL_TEST:
