@@ -28,6 +28,11 @@
 
 #define PB_MASK(mask, val) (((val) << (__builtin_ffs(mask) - 1)) & (mask))
 
+#ifndef NV097_SET_PROVOKING_VERTEX
+#define NV097_SET_PROVOKING_VERTEX 0x000009FC
+#define NV097_SET_PROVOKING_VERTEX_LAST 0
+#endif
+
 typedef struct xgu_texture
 {
     GLint data_width;

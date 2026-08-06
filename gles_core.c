@@ -603,6 +603,7 @@ void glContextInit(GLint window_width, GLint window_height)
 
     uint32_t *pb = pb_begin();
     pb = combiner_specular_fog_config(pb, GL_FALSE, GL_FALSE);
+    pb = push_command_parameter(pb, NV097_SET_PROVOKING_VERTEX, NV097_SET_PROVOKING_VERTEX_LAST);
     pb_end(pb);
 
     /* --- Table 6.18: Pixel store --- */
