@@ -855,6 +855,14 @@ void glContextInit(GLint window_width, GLint window_height)
     glClearDepthf(1.0f);
     glClearStencil(0);
 
+#ifdef NXDK_GLES11_WITH_GL4ES
+    extern void set_getprocaddress(void*(*__stdcall)(const char*));
+    extern void initialize_gl4es(void);
+    extern void* __stdcall nxdk_gl4es_getprocaddress(const char* name);
+    set_getprocaddress(nxdk_gl4es_getprocaddress);
+    initialize_gl4es();
+#endif
+
     gliStagingInit();
 
     gliFlushStateChange();

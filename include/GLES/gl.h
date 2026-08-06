@@ -17,6 +17,10 @@ extern "C" {
 
 #include <GLES/glplatform.h>
 
+#ifdef NXDK_GLES11_WITH_GL4ES
+#include "gl_prefix.h"
+#endif
+
 /* Generated on date 20251022 */
 
 /* Generated C header for:
