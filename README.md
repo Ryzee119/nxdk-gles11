@@ -84,6 +84,55 @@ The NV2A GPU requires vertex data to be in physically contiguous memory to read 
 * **VBOs:** If you use Vertex Buffer Objects (`glGenBuffers`, `glBindBuffer`), the data is already stored in contiguous memory and staging is bypassed for maximum performance.
 * **Arena Size:** The staging arena defaults to 2MB. If you have very large client-side draws and see an out-of-memory error in the debug output, you can increase this by defining `GLI_STAGING_ARENA_SIZE` before building.
 
+## Desktop OpenGL Support (gl4es)
+nxdk-gles11 uses CMake `FetchContent` to integrate [gl4es](https://github.com/ptitseb/gl4es) and provide hardware-accelerated **Desktop OpenGL 1.5** support.
+
+To use gl4es, simply enable NXDK_GLES11_WITH_GL4ES and include `<GL/gl.h>` instead of `<GLES/gl.h>` in your source files. Link against `GL` (or `OpenGL::GL`).
+
+### CMake
+```cmake
+set(NXDK_GLES11_WITH_GL4ES ON CACHE BOOL "Enable gl4es" FORCE)
+add_subdirectory(path/to/nxdk-gles11)
+target_link_libraries(myapp PRIVATE GL)
+target_link_libraries(myapp PRIVATE ${NXDK_DIR}/lib/libpbkit.lib)
+```
+
+### Usage
+```c
+#define _WINGDI_  // Guard against WGL headers
+#include <GL/gl.h> // For gl4es desktop GL
+#include <hal/video.h>
+
+void glContextInit(GLint window_width, GLint window_height);
+void glFlipNV2A(void);
+
+int main (int argc, char **argv)
+{
+    XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);
+    glContextInit(640, 480);
+    glSwapInterval(1);
+
+    // We have desktop GL 1.5!
+    while (1) {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glBegin(GL_TRIANGLES);
+            glColor3f(1.0f, 0.0f, 0.0f);
+            glVertex3f(0.0f, 0.5f, 0.0f);
+            glColor3f(0.0f, 1.0f, 0.0f);
+            glVertex3f(-0.5f, -0.5f, 0.0f);
+            glColor3f(0.0f, 0.0f, 1.0f);
+            glVertex3f(0.5f, -0.5f, 0.0f);
+        glEnd();
+
+        glFlipNV2A();
+    }
+    return 0;
+}
+```
+
+
 
 ## Todo
 * [ ] Lots of FIXMEs

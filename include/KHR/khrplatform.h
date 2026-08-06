@@ -1,7 +1,11 @@
 #pragma once
 
 #define GL_API
+#ifdef _WIN32
+#define GL_APIENTRY __stdcall
+#else
 #define GL_APIENTRY
+#endif
 
 #define KHRONOS_SUPPORT_INT64 1
 #define KHRONOS_SUPPORT_FLOAT 1
