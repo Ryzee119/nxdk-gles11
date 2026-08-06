@@ -74,45 +74,13 @@ DWORD gliEnumToNvPrimitive(GLenum mode)
     }
 }
 
-// FIXME. No idea if these are correct.
 DWORD gliEnumToNvLogicOp(GLenum opcode)
 {
-    switch (opcode) {
-        case GL_CLEAR:
-            return 0x00;
-        case GL_AND:
-            return 0x01;
-        case GL_AND_REVERSE:
-            return 0x02;
-        case GL_COPY:
-            return 0x03;
-        case GL_AND_INVERTED:
-            return 0x04;
-        case GL_NOOP:
-            return 0x05;
-        case GL_XOR:
-            return 0x06;
-        case GL_OR:
-            return 0x07;
-        case GL_NOR:
-            return 0x08;
-        case GL_EQUIV:
-            return 0x09;
-        case GL_INVERT:
-            return 0x0a;
-        case GL_OR_REVERSE:
-            return 0x0b;
-        case GL_COPY_INVERTED:
-            return 0x0c;
-        case GL_OR_INVERTED:
-            return 0x0d;
-        case GL_NAND:
-            return 0x0e;
-        case GL_SET:
-            return 0x0f;
-        default:
-            return -1;
+    // The NV2A hardware expects the actual OpenGL enum values directly
+    if (opcode >= GL_CLEAR && opcode <= GL_SET) {
+        return opcode;
     }
+    return -1;
 }
 
 XguFuncType gliEnumToNvFunc(GLenum func)
