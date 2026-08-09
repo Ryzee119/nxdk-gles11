@@ -41,12 +41,11 @@ if(NXDK_GLES11_WITH_GL4ES)
     FetchContent_MakeAvailable(gl4es)
     
     if(TARGET GL)
-        target_compile_options(GL PRIVATE -w)
+        target_compile_options(GL PRIVATE -w -ffunction-sections -fdata-sections)
     endif()
-    
-    # Generate shim
+
     set(GLES11_GL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/GLES)
-    set(GL_PREFIX_H ${CMAKE_CURRENT_BINARY_DIR}/gl_prefix.h)
+    set(GL_PREFIX_H ${CMAKE_CURRENT_BINARY_DIR}/private/gl_prefix.h)
     set(GL4ES_SHIM_C ${CMAKE_CURRENT_BINARY_DIR}/gl4es_shim.c)
     
     add_custom_command(
@@ -55,8 +54,7 @@ if(NXDK_GLES11_WITH_GL4ES)
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_gl4es_shim.py ${GLES11_GL_DIR}/gl.h
         COMMENT "Generating GL prefix header and shim"
     )
-    
-    list(APPEND GLESV1_CM_SOURCES ${GL4ES_SHIM_C})
+    list(APPEND GLESV1_CM_SOURCES ${GL4ES_SHIM_C} ${GL_PREFIX_H})
 endif()
 
 add_library(GLESv1_CM
@@ -65,19 +63,22 @@ add_library(GLESv1_CM
 
 if(NXDK_GLES11_WITH_GL4ES)
     target_compile_definitions(GLESv1_CM PUBLIC NXDK_GLES11_WITH_GL4ES)
-    target_compile_definitions(GLESv1_CM PRIVATE NXDK_GLES11_PREFIX_EXPORTS)
-    target_link_libraries(GLESv1_CM PUBLIC GL) # GL is the gl4es target
-    
-    # Make linking against GL transparently include GLESv1_CM
+    target_compile_options(GLESv1_CM PRIVATE "SHELL:-include ${GL_PREFIX_H}")
+    target_link_libraries(GLESv1_CM PUBLIC GL)
+
     if(TARGET GL)
         if(POLICY CMP0079)
             cmake_policy(SET CMP0079 NEW)
         endif()
         target_link_libraries(GL INTERFACE GLESv1_CM)
-        # Also provide an OpenGL::GL alias which is common in CMake projects
         if (NOT TARGET OpenGL::GL)
             add_library(OpenGL::GL ALIAS GL)
         endif()
+
+        # /ALTERNATENAME directives in .drectve only reach linker after object
+        # is loaded; -wholearchive loads them all up front.
+        set_property(TARGET GL APPEND PROPERTY
+                     INTERFACE_LINK_OPTIONS "-wholearchive:$<TARGET_FILE:GL>")
     endif()
 endif()
 
@@ -86,10 +87,7 @@ target_include_directories(GLESv1_CM PUBLIC
 )
 
 if(NXDK_GLES11_WITH_GL4ES)
-    target_include_directories(GLESv1_CM PUBLIC 
-        ${gl4es_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_BINARY_DIR}
-    )
+    target_include_directories(GLESv1_CM PUBLIC ${gl4es_SOURCE_DIR}/include)
 endif()
 
 target_link_libraries(GLESv1_CM PRIVATE swizzle xgu stb arena)
