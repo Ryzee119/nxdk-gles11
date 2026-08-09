@@ -8,14 +8,13 @@ def get_implemented_funcs(src_dir):
     for c_file in glob.glob(os.path.join(src_dir, "*.c")):
         with open(c_file, 'r') as f:
             data = f.read()
-        # Look for GL_API ... GL_APIENTRY glXXX
         matches = re.findall(r'GL_API\s+[\w\s\*]+\s*GL_APIENTRY\s+(gl\w+)\s*\(', data)
         for m in matches:
             funcs.add(m)
     return funcs
 
 def main():
-    src_dir = sys.argv[1] # nxdk-gles11 source dir
+    src_dir = sys.argv[1]
     gl_h = os.path.join(sys.argv[2], 'gl.h')
     glext_h = os.path.join(sys.argv[2], 'glext.h')
     
@@ -25,9 +24,13 @@ def main():
     prefix_h = sys.argv[3]
     shim_c = sys.argv[4]
     
+    os.makedirs(os.path.dirname(os.path.abspath(prefix_h)), exist_ok=True)
     with open(prefix_h, 'w') as f:
         f.write("#ifndef NXDK_GL_PREFIX_H\n")
         f.write("#define NXDK_GL_PREFIX_H\n\n")
+        f.write("/* Private to nxdk-gles11. Renames ES1.1 entry points to nxdk_glFoo\n")
+        f.write(" * so they can coexist with gl4es' desktop GL ones without corrupting\n")
+        f.write(" * both layers' matrix/state stacks. */\n\n")
         for func in funcs:
             f.write(f"#define {func} nxdk_{func}\n")
         f.write("\n#endif\n")
@@ -58,14 +61,11 @@ def main():
         f.write("double atof(const char *nptr) {\n")
         f.write("    return strtod(nptr, NULL);\n")
         f.write("}\n\n")
-        
-        # gl4es defines it as void __stdcall GetSystemTimeAsFileTime(unsigned __int64*)
-        # But if the linker says __imp__GetSystemTimeAsFileTime@4, we might need to provide that alias.
+
         f.write("void __stdcall KeQuerySystemTime(void*);\n")
         f.write("void __stdcall GetSystemTimeAsFileTime(void* p) {\n")
         f.write("    KeQuerySystemTime(p);\n")
         f.write("}\n")
-        # Provide the _imp_ alias just in case
         f.write("void* __imp__GetSystemTimeAsFileTime __asm__(\"__imp__GetSystemTimeAsFileTime@4\") = &GetSystemTimeAsFileTime;\n")
 
 if __name__ == '__main__':
