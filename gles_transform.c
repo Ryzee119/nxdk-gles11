@@ -412,12 +412,16 @@ void gliTransformFlush(void)
 
         if (c->transformation_state.texture_matrix_dirty[i]) {
             c->transformation_state.texture_matrix_dirty[i] = GL_FALSE;
+            mat4 *stack = c->transformation_state.texture_matrix_stack[i];
+            GLint depth = c->transformation_state.texture_matrix_stack_depth[i];
             mat4 texture_matrix;
-            glGetFloatv(GL_TEXTURE_MATRIX, (GLfloat *)texture_matrix);
+            glm_mat4_copy(stack[depth - 1], texture_matrix);
 
             // Apply uv scale corrections
-            texture_matrix[0][0] *= xgu_texture->u_scale;
-            texture_matrix[1][1] *= xgu_texture->v_scale;
+            for (int col = 0; col < 4; col++) {
+                texture_matrix[col][0] *= xgu_texture->u_scale;
+                texture_matrix[col][1] *= xgu_texture->v_scale;
+            }
 
             // Upload to hardware
             uint32_t *pb = pb_begin();
