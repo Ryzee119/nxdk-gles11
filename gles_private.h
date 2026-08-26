@@ -312,6 +312,7 @@ typedef struct texture_object
     GLenum wrap_s;
     GLenum wrap_t;
     GLenum internalformat;
+    GLenum type;
 
     GLboolean generate_mipmap;
     struct texture_object *next;
