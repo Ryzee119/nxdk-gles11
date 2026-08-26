@@ -257,6 +257,7 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
 {
     gli_context_t *context = gliGetContext();
     const GLint tu = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    const GLint client_tu = context->vertex_array_data.client_active_texture - GL_TEXTURE0;
 
     switch (pname) {
         case GL_ACTIVE_TEXTURE:
@@ -998,30 +999,30 @@ static const void *gliGetElementPtr(GLenum pname, enum gli_get_type *element_typ
             // initial value is GL_FALSE. See glTexCoordPointer.
             *element_type = GLI_BOOLEAN;
             *element_count = 1;
-            return &context->vertex_array_data.texcoord_array_enabled;
+            return &context->vertex_array_data.texcoord_array_enabled[client_tu];
         case GL_TEXTURE_COORD_ARRAY_BUFFER_BINDING:
             // params returns one value, the texture coordinate array buffer binding. See glTexCoordPointer.
             *element_type = GLI_INT;
             *element_count = 1;
-            return &context->vertex_array_data.texcoord_array_buffer_binding;
+            return &context->vertex_array_data.texcoord_array_buffer_binding[client_tu];
         case GL_TEXTURE_COORD_ARRAY_SIZE:
             // params returns one value, the number of coordinates per element in the texture coordinate array. See
             // glTexCoordPointer.
             *element_type = GLI_INT;
             *element_count = 1;
-            return &context->vertex_array_data.texcoord_array_size;
+            return &context->vertex_array_data.texcoord_array_size[client_tu];
         case GL_TEXTURE_COORD_ARRAY_STRIDE:
             // params returns one value, the byte offset between consecutive elements in the texture coordinate array.
             // See glTexCoordPointer.
             *element_type = GLI_INT;
             *element_count = 1;
-            return &context->vertex_array_data.texcoord_array_stride;
+            return &context->vertex_array_data.texcoord_array_stride[client_tu];
         case GL_TEXTURE_COORD_ARRAY_TYPE:
             // params returns one value, returns the data type of each coordinate in the texture coordinate array. See
             // glTexCoordPointer.
             *element_type = GLI_INT;
             *element_count = 1;
-            return &context->vertex_array_data.texcoord_array_type;
+            return &context->vertex_array_data.texcoord_array_type[client_tu];
         case GL_TEXTURE_MATRIX:
             // params returns sixteen values: the texture matrix on the top of the texture matrix stack. See
             // glPushMatrix.
