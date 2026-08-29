@@ -120,7 +120,7 @@ GL_API void GL_APIENTRY glColorPointer(GLint size, GLenum type, GLsizei stride, 
         gliSetError(GL_INVALID_ENUM);
         return;
     }
-    if (size != 4) {
+    if (size != 4 && size != 3) {
         gliSetError(GL_INVALID_VALUE);
         return;
     }
