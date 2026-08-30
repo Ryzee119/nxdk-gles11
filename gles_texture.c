@@ -93,6 +93,11 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         return;
     }
 
+    // Fast path: if this texture is already bound to this texture unit, avoid O(N) list traversal
+    if (texture_unit->texture_binding_2d == texture) {
+        return;
+    }
+
     // First check if the object already exists, if so just bind it to the texture_unit and we are done
     texture_object_t *texture_object = gliFindTextureObject(texture, NULL);
     if (texture_object != NULL) {
