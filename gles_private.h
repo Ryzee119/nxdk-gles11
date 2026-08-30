@@ -519,7 +519,14 @@ void gliTextureFlush(void);
 void gliFogFlush(void);
 void gliPointParamsFlush(void);
 GLvoid *gliGetBufferPointer(GLuint buffer_binding, const GLvoid *ptr);
-gli_context_t *gliGetContext(void);
+
+extern gli_context_t gli_context;
+
+static inline gli_context_t *gliGetContext(void)
+{
+    return &gli_context;
+}
+
 GLuint gliFormatToBpp(GLenum format);
 GLuint gliEnumtoByteSize(GLenum type);
 void *gli_memcpy(void *dst, const void *src, size_t n);

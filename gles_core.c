@@ -6,7 +6,7 @@
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb_sprintf.h>
 
-static gli_context_t g_context;
+gli_context_t gli_context;
 
 GL_API void GL_APIENTRY glFinish(void)
 {
@@ -571,11 +571,6 @@ GL_API void GL_APIENTRY glSampleCoveragex(GLclampx value, GLboolean invert)
 {
     GLfloat fvalue = gliFixedtoFloat(value);
     glSampleCoverage(fvalue, invert);
-}
-
-gli_context_t *gliGetContext(void)
-{
-    return &g_context;
 }
 
 void gliSetError(GLenum error)
