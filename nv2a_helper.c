@@ -10,6 +10,8 @@ void glFlipNV2A()
 {
     gli_context_t *context = gliGetContext();
 
+    gliStagingFrameEnd();
+
     if (gl_swap_interval > 0) {
         for (int i = 0; i < gl_swap_interval; i++) {
             pb_wait_for_vbl();

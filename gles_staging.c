@@ -19,6 +19,10 @@ typedef struct
     uint8_t *dst_start;
 } staged_range_t;
 
+static uint32_t frame_staged_bytes[2];
+static uint32_t cur_staged_bytes;
+static uint32_t frame_idx;
+
 void gliStagingInit(void)
 {
     gli_context_t *context = gliGetContext();
@@ -29,6 +33,8 @@ void gliStagingInit(void)
 
     context->staging_arena_pool = pool;
     arena_init(pool, GLI_STAGING_ARENA_SIZE, &context->staging_arena);
+
+    frame_staged_bytes[0] = frame_staged_bytes[1] = cur_staged_bytes = frame_idx = 0;
 }
 
 void gliStagingDestroy(void)
@@ -37,6 +43,20 @@ void gliStagingDestroy(void)
     if (context->staging_arena_pool) {
         MmFreeContiguousMemory(context->staging_arena_pool);
         context->staging_arena_pool = NULL;
+    }
+}
+
+void gliStagingFrameEnd(void)
+{
+    frame_staged_bytes[frame_idx++ & 1] = cur_staged_bytes;
+    cur_staged_bytes = 0;
+
+    if (frame_idx % 3 == 0) {
+        uint32_t usage = frame_staged_bytes[0] + frame_staged_bytes[1];
+        if (usage > (GLI_STAGING_ARENA_SIZE * 8 / 10)) {
+            gliDebugF("[gles] WARNING: Staging arena 2-frame usage (%u / %u bytes, %.1f%%) near capacity!\n",
+                      usage, (unsigned)GLI_STAGING_ARENA_SIZE, (float)usage * 100.0f / (float)GLI_STAGING_ARENA_SIZE);
+        }
     }
 }
 
@@ -71,6 +91,7 @@ static void *stage_range(
     }
 
     uint32_t byte_size = (uint32_t)(src_end - src_start);
+    cur_staged_bytes += byte_size;
 
     // Round robin if we will go over capacity
     if (arena_available(arena) < byte_size) {
