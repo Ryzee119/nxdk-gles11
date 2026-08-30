@@ -55,9 +55,21 @@ void gliStagingFrameEnd(void)
         uint32_t usage = frame_staged_bytes[0] + frame_staged_bytes[1];
         if (usage > (GLI_STAGING_ARENA_SIZE * 8 / 10)) {
             gliDebugF("[gles] WARNING: Staging arena 2-frame usage (%u / %u bytes, %.1f%%) near capacity!\n",
-                      usage, (unsigned)GLI_STAGING_ARENA_SIZE, (float)usage * 100.0f / (float)GLI_STAGING_ARENA_SIZE);
+                      usage,
+                      (unsigned)GLI_STAGING_ARENA_SIZE,
+                      (float)usage * 100.0f / (float)GLI_STAGING_ARENA_SIZE);
         }
     }
+}
+
+// Compute the effective stride for an attribute array.
+// OpenGL spec: if stride is 0, elements are tightly packed.
+static inline GLsizei compute_stride(GLsizei user_stride, GLint component_count, GLenum type)
+{
+    if (user_stride != 0) {
+        return user_stride;
+    }
+    return (GLsizei)(component_count * gliEnumtoByteSize(type));
 }
 
 // Check if this source range is fully contained within an already-staged range.
@@ -78,51 +90,56 @@ static void *find_staged_overlap(const staged_range_t *ranges,
 
 // Copy a source range into the staging arena. Checks for interleaving first.
 // Returns the new GPU-accessible pointer, or NULL on arena overflow.
-static void *stage_range(
-    arena_t *arena, staged_range_t *ranges, int *range_count, const void *ptr, GLsizei stride, GLsizei vertex_count)
+static void *stage_attribute(arena_t *arena,
+                             staged_range_t *ranges,
+                             int *range_count,
+                             const void *ptr,
+                             GLsizei stride,
+                             size_t elem_size,
+                             GLsizei vertex_count)
 {
     const uint8_t *src_start = (const uint8_t *)ptr;
-    const uint8_t *src_end = src_start + (vertex_count * stride);
+    size_t total_bytes;
+    if (stride > 0) {
+        total_bytes = (size_t)(vertex_count - 1) * stride + elem_size;
+    } else {
+        total_bytes = (size_t)vertex_count * elem_size;
+        stride = (GLsizei)elem_size;
+    }
+    const uint8_t *src_end = src_start + total_bytes;
 
-    // Check if this range was already copied (interleaved with another attribute)
+    // Check if this range was already copied (interleaved with an earlier attribute)
     void *existing = find_staged_overlap(ranges, *range_count, src_start, src_end);
     if (existing) {
         return existing;
     }
 
-    uint32_t byte_size = (uint32_t)(src_end - src_start);
-    cur_staged_bytes += byte_size;
+    // For interleaved buffers (stride > elem_size), allocate the full vertex_count * stride
+    // block so all interleaved attributes fit within this single staged range.
+    uint32_t alloc_bytes = (stride > (GLsizei)elem_size) ? (uint32_t)(vertex_count * stride) : (uint32_t)total_bytes;
+    cur_staged_bytes += alloc_bytes;
 
     // Round robin if we will go over capacity
-    if (arena_available(arena) < byte_size) {
+    if (arena_available(arena) < alloc_bytes) {
         arena_reset(arena);
+        *range_count = 0;
     }
 
-    void *dst = arena_alloc(arena, byte_size);
+    void *dst = arena_alloc(arena, alloc_bytes);
     if (!dst) {
         return NULL;
     }
-    gli_memcpy(dst, src_start, byte_size);
+    gli_memcpy(dst, src_start, alloc_bytes);
 
     // Record this range for interleaving detection
     if (*range_count < MAX_STAGED_RANGES) {
         ranges[*range_count].src_start = src_start;
-        ranges[*range_count].src_end = src_end;
+        ranges[*range_count].src_end = src_start + alloc_bytes;
         ranges[*range_count].dst_start = (uint8_t *)dst;
         (*range_count)++;
     }
 
     return dst;
-}
-
-// Compute the effective stride for an attribute array.
-// OpenGL spec: if stride is 0, elements are tightly packed.
-static GLsizei compute_stride(GLsizei user_stride, GLint component_count, GLenum type)
-{
-    if (user_stride != 0) {
-        return user_stride;
-    }
-    return (GLsizei)(component_count * gliEnumtoByteSize(type));
 }
 
 GLboolean gliStageClientArrays(GLsizei vertex_count)
@@ -140,8 +157,10 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
 
     // --- Vertex array ---
     if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding == 0 && vad->vertex_array_ptr != NULL) {
+        size_t elem_size = (size_t)(vad->vertex_array_size * gliEnumtoByteSize(vad->vertex_array_type));
         GLsizei stride = compute_stride(vad->vertex_array_stride, vad->vertex_array_size, vad->vertex_array_type);
-        void *staged = stage_range(arena, ranges, &range_count, vad->vertex_array_ptr, stride, vertex_count);
+        void *staged =
+            stage_attribute(arena, ranges, &range_count, vad->vertex_array_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -152,8 +171,10 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
 
     // --- Normal array ---
     if (vad->normal_array_enabled && vad->normal_array_buffer_binding == 0 && vad->normal_array_ptr != NULL) {
+        size_t elem_size = (size_t)(3 * gliEnumtoByteSize(vad->normal_array_type));
         GLsizei stride = compute_stride(vad->normal_array_stride, 3, vad->normal_array_type);
-        void *staged = stage_range(arena, ranges, &range_count, vad->normal_array_ptr, stride, vertex_count);
+        void *staged =
+            stage_attribute(arena, ranges, &range_count, vad->normal_array_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -164,8 +185,10 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
 
     // --- Color array ---
     if (vad->color_array_enabled && vad->color_array_buffer_binding == 0 && vad->color_array_ptr != NULL) {
+        size_t elem_size = (size_t)(vad->color_array_size * gliEnumtoByteSize(vad->color_array_type));
         GLsizei stride = compute_stride(vad->color_array_stride, vad->color_array_size, vad->color_array_type);
-        void *staged = stage_range(arena, ranges, &range_count, vad->color_array_ptr, stride, vertex_count);
+        void *staged =
+            stage_attribute(arena, ranges, &range_count, vad->color_array_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -178,9 +201,11 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         if (vad->texcoord_array_enabled[i] && vad->texcoord_array_buffer_binding[i] == 0 &&
             vad->texcoord_array_ptr[i] != NULL) {
+            size_t elem_size = (size_t)(vad->texcoord_array_size[i] * gliEnumtoByteSize(vad->texcoord_array_type[i]));
             GLsizei stride =
                 compute_stride(vad->texcoord_array_stride[i], vad->texcoord_array_size[i], vad->texcoord_array_type[i]);
-            void *staged = stage_range(arena, ranges, &range_count, vad->texcoord_array_ptr[i], stride, vertex_count);
+            void *staged = stage_attribute(
+                arena, ranges, &range_count, vad->texcoord_array_ptr[i], stride, elem_size, vertex_count);
             if (!staged) {
                 goto out_of_memory;
             }
@@ -193,8 +218,10 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     // --- Point size array ---
     if (vad->point_size_array_enabled && vad->point_size_array_buffer_binding == 0 &&
         vad->point_size_array_ptr != NULL) {
+        size_t elem_size = (size_t)(1 * gliEnumtoByteSize(vad->point_size_array_type));
         GLsizei stride = compute_stride(vad->point_size_array_stride, 1, vad->point_size_array_type);
-        void *staged = stage_range(arena, ranges, &range_count, vad->point_size_array_ptr, stride, vertex_count);
+        void *staged =
+            stage_attribute(arena, ranges, &range_count, vad->point_size_array_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -214,7 +241,7 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
 
 out_of_memory:
     gliDebugF("[gles] staging arena overflow (%u bytes). Increase GLI_STAGING_ARENA_SIZE.\n",
-                    (unsigned)GLI_STAGING_ARENA_SIZE);
+              (unsigned)GLI_STAGING_ARENA_SIZE);
     gliSetError(GL_OUT_OF_MEMORY);
     return GL_FALSE;
 }
