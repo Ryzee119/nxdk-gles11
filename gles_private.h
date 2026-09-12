@@ -344,6 +344,7 @@ typedef struct
     GLenum server_active_texture;
     texture_unit_t texture_units[GLI_MAX_TEXTURE_UNITS];
     texture_object_t *texture_objects;
+    GLboolean combiner_dirty; // Gates combiner_set_texture_env() rebuild
 } texture_environment_t;
 
 // Table 6.16 - Pixel Operations

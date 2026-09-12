@@ -314,6 +314,7 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             const GLuint texture = context->texture_environment.server_active_texture - GL_TEXTURE0;
             context->texture_environment.texture_units[texture].texture_2d_enabled = enable;
             context->texture_environment.texture_units[texture].texture_unit_dirty = GL_TRUE;
+            context->texture_environment.combiner_dirty = GL_TRUE;
             context->transformation_state.texture_matrix_dirty[texture] = GL_TRUE;
             break;
         default:
@@ -596,6 +597,7 @@ void glContextInit(GLint window_width, GLint window_height)
     pb_target_back_buffer();
 
     combiner_init();
+    context->texture_environment.combiner_dirty = GL_TRUE;
 
     uint32_t *pb = pb_begin();
     pb = combiner_specular_fog_config(pb, GL_FALSE, GL_FALSE);
