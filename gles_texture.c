@@ -89,6 +89,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->texture_binding_2d = 0;
         texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
+        context->texture_environment.combiner_dirty = GL_TRUE;
         context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
         return;
     }
@@ -104,6 +105,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->texture_binding_2d = texture;
         texture_unit->bound_texture_object = texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
+        context->texture_environment.combiner_dirty = GL_TRUE;
         context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
         return;
     }
@@ -488,6 +490,7 @@ GL_API void GL_APIENTRY glTexEnviv(GLenum target, GLenum pname, const GLint *par
             return;
     }
     texture_unit->texture_unit_dirty = GL_TRUE;
+    context->texture_environment.combiner_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *params)
@@ -513,6 +516,7 @@ GL_API void GL_APIENTRY glTexEnvfv(GLenum target, GLenum pname, const GLfloat *p
                 texture_unit->tex_env_color[i] = params[i];
             }
             texture_unit->texture_unit_dirty = GL_TRUE;
+            context->texture_environment.combiner_dirty = GL_TRUE;
             return;
         default:
             break;
@@ -1163,6 +1167,7 @@ void gliTextureFlush(void)
             pb_end(pb);
 
             texture_unit->texture_unit_dirty = GL_TRUE;
+            context->texture_environment.combiner_dirty = GL_TRUE;
             continue;
         }
 
@@ -1212,7 +1217,11 @@ void gliTextureFlush(void)
         }
     }
 
-    combiner_set_texture_env();
+    // Only rebuild NV2A register combiners when texture env state actually changed
+    if (context->texture_environment.combiner_dirty) {
+        combiner_set_texture_env();
+        context->texture_environment.combiner_dirty = GL_FALSE;
+    }
 
     // After combiners have evaluated texture_unit_dirty, clear the flag
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {

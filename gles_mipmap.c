@@ -177,4 +177,5 @@ GL_API void GL_APIENTRY glGenerateMipmapOES(GLenum target)
     gliGenSwizzledMipmaps(xgu_texture);
 
     texture_unit->texture_unit_dirty = GL_TRUE;
+    gliGetContext()->texture_environment.combiner_dirty = GL_TRUE;
 }
