@@ -547,6 +547,53 @@ void combiner_set_texture_env(void)
     gli_context_t *context = gliGetContext();
     uint32_t *pb;
 
+    // --- Combiner input hash for cache check (FNV-1a) ---
+    // Hash all inputs that affect the register combiner output.
+    // If nothing changed since last call, skip the entire rebuild.
+    {
+        static uint32_t cached_hash = 0;
+        uint32_t hash = 0x811c9dc5u; // FNV-1a offset basis
+
+#define HASH_MIX(val)                 \
+    do {                              \
+        hash ^= (uint32_t)(val);      \
+        hash *= 0x01000193u;          \
+    } while (0)
+
+        for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+            const texture_unit_t *tu = &context->texture_environment.texture_units[i];
+            HASH_MIX(tu->texture_2d_enabled);
+            HASH_MIX(tu->texture_binding_2d); // different texture -> different stage config
+            HASH_MIX(tu->tex_env_mode);
+            HASH_MIX(FLOAT4_TO_PACKED_ARGB32(tu->tex_env_color));
+            HASH_MIX(tu->coord_replace_oes_enabled);
+            if (tu->tex_env_mode == GL_COMBINE) {
+                HASH_MIX(tu->combine_rgb_function);
+                HASH_MIX(tu->combine_alpha_function);
+                for (int j = 0; j < 3; j++) {
+                    HASH_MIX(tu->combine_rgb_source[j]);
+                    HASH_MIX(tu->combine_alpha_source[j]);
+                    HASH_MIX(tu->combine_rgb_operand[j]);
+                    HASH_MIX(tu->combine_alpha_operand[j]);
+                }
+                HASH_MIX((uint32_t)tu->rgb_scale);
+                HASH_MIX((uint32_t)tu->alpha_scale);
+            }
+        }
+        // Include clip plane state since it affects shader_program[]
+        for (int i = 0; i < GLI_MAX_CLIP_PLANES; i++) {
+            HASH_MIX(context->transformation_state.clip_plane_enabled[i]);
+        }
+        HASH_MIX(context->rasterization_state.point_sprite_oes_enabled);
+
+#undef HASH_MIX
+
+        if (hash == cached_hash) {
+            return;
+        }
+        cached_hash = hash;
+    }
+
     DWORD shader_program[4] = {
         NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE,
         NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE,
