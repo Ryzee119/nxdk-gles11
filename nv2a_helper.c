@@ -1,9 +1,58 @@
 #include "gles_private.h"
+#include <stb_sprintf.h>
+
 static int gl_swap_interval = 1;
+static GLboolean gl_show_fps = GL_TRUE;
 
 void glSwapInterval(int interval)
 {
     gl_swap_interval = interval;
+}
+
+static ULONGLONG frame_start = 0;
+static ULONGLONG last_render_end = 0;
+static ULONGLONG accum_render_ticks = 0;
+static ULONGLONG accum_real_ticks = 0;
+static uint32_t accum_frames = 0;
+static float fps = 0.0f;
+static float mean_frame_time_ms = 0.0f;
+
+void glShowFPSNV2A(GLboolean enable)
+{
+    gl_show_fps = enable;
+    if (!enable) {
+        pb_erase_text_screen();
+        frame_start = last_render_end = accum_render_ticks = accum_real_ticks = accum_frames = 0;
+        fps = mean_frame_time_ms = 0.0f;
+    }
+}
+
+static void calculate_and_display_fps(void)
+{
+    ULONGLONG render_end = KeQueryPerformanceCounter();
+    ULONGLONG freq = KeQueryPerformanceFrequency();
+
+    if (frame_start != 0 && freq > 0) {
+        accum_render_ticks += render_end - frame_start;
+        accum_real_ticks += last_render_end ? (render_end - last_render_end) : (render_end - frame_start);
+        accum_frames++;
+
+        if (accum_real_ticks >= freq / 2 || (fps == 0.0f && accum_frames >= 5)) {
+            fps = (float)((double)accum_frames * freq / accum_real_ticks);
+            mean_frame_time_ms = (float)((double)accum_render_ticks * 1000.0 / ((double)accum_frames * freq));
+            accum_render_ticks = accum_real_ticks = accum_frames = 0;
+        }
+    }
+    last_render_end = render_end;
+
+    if (fps > 0.0f) {
+        char buffer[64];
+        int len = stbsp_snprintf(buffer, sizeof(buffer), "FPS: %.02f (%.02f ms)", fps, mean_frame_time_ms);
+        pb_erase_text_screen();
+        pb_fill(20, 25, len * 10, 20, 0xFF000000);
+        pb_print("%s", buffer);
+        pb_draw_text_screen();
+    }
 }
 
 void glFlipNV2A()
@@ -11,6 +60,14 @@ void glFlipNV2A()
     gli_context_t *context = gliGetContext();
 
     gliStagingFrameEnd();
+
+    if (gl_show_fps) {
+        // Wait until GPU completes rendering commands before measuring render time
+        while (pb_busy()) {
+            NtYieldExecution();
+        }
+        calculate_and_display_fps();
+    }
 
     if (gl_swap_interval > 0) {
         for (int i = 0; i < gl_swap_interval; i++) {
@@ -35,6 +92,10 @@ void glFlipNV2A()
     pb_end(pb);
 
     pb_reset();
+
+    if (gl_show_fps) {
+        frame_start = KeQueryPerformanceCounter();
+    }
 }
 
 XguVertexArrayType gliEnumToNvType(GLenum type)
