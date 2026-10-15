@@ -72,20 +72,21 @@ void gliFogFlush(void)
     coloring_state_t *cs = &context->coloring_state;
     uint32_t *pb;
 
-    if (cs->fog_dirty) {
-        cs->fog_dirty = GL_FALSE;
+    if (!cs->fog_dirty) {
+        return;
+    }
+    cs->fog_dirty = GL_FALSE;
 
-        pb = pb_begin();
-        pb = xgu_set_fog_mode(pb, gliEnumToNvFogMode(cs->fog_mode));
-        pb = xgu_set_fog_color(pb, FLOAT4_TO_PACKED_ABGR32(cs->fog_color));
+    pb = pb_begin();
 
+    if (cs->fog_enabled) {
         const GLenum mode = cs->fog_mode;
         const GLfloat density = cs->fog_density;
         const GLfloat start = cs->fog_start;
         const GLfloat end = cs->fog_end;
 
         const GLfloat LN256 = 5.5452f;
-        const GLfloat SQRT_LN256 = 2.354f; // sqrt(5.5452)
+        const GLfloat SQRT_LN256 = 2.354824834249885f;
 
         GLfloat bias = 0.0f, scale = 0.0f;
         // https://github.com/xemu-project/xemu/blob/5eb603b28d926bc145dcaca63cce173e1008a144/hw/xbox/nv2a/pgraph/glsl/vsh.c#L324
@@ -122,10 +123,26 @@ void gliFogFlush(void)
             }
             default:
                 assert(0 && "Unhandled fog mode in gliFogFlush");
+                pb_end(pb);
                 return;
         }
 
+        const XguFogGenMode gen_mode = (context->hints_state.fog_hint == GL_FASTEST)
+                                           ? XGU_FOG_GEN_MODE_PLANAR
+                                           : XGU_FOG_GEN_MODE_RADIAL;
+
+        // Atomically emit all fog state and final combiner, matching lazy.cpp:565-606
+        pb = xgu_set_fog_gen_mode(pb, gen_mode);
+        pb = xgu_set_fog_enable(pb, true);
+        pb = xgu_set_fog_mode(pb, gliEnumToNvFogMode(cs->fog_mode));
+        pb = xgu_set_fog_color(pb, FLOAT4_TO_PACKED_ABGR32(cs->fog_color));
         pb = xgu_set_fog_params(pb, bias, scale);
-        pb_end(pb);
+        pb = combiner_specular_fog_config(pb, GL_TRUE, context->lighting_state.lighting_enabled);
+    } else {
+        // Fog disabled: disable fog unit and configure diffuse/specular passthrough on final combiner, matching lazy.cpp:622-635
+        pb = xgu_set_fog_enable(pb, false);
+        pb = combiner_specular_fog_config(pb, GL_FALSE, context->lighting_state.lighting_enabled);
     }
+
+    pb_end(pb);
 }

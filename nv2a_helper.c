@@ -1128,7 +1128,7 @@ uint32_t *combiner_specular_fog_config(uint32_t *p, GLboolean fog_enabled, GLboo
     cw1 |= PB_MASK(SRC_E, REG_ZERO);
     cw1 |= PB_MASK(SRC_F, REG_ZERO);
     cw1 |= PB_MASK(SRC_G, REG_SPARE0) | SRC_G_FLAG_ALPHA;
-    cw1 |= PB_MASK(NV097_SET_COMBINER_SPECULAR_FOG_CW1_SPECULAR_CLAMP, specular_enabled ? 1 : 0);
+    cw1 |= PB_MASK(NV097_SET_COMBINER_SPECULAR_FOG_CW1_SPECULAR_CLAMP, 1);
     p = pb_push1(p, NV097_SET_COMBINER_SPECULAR_FOG_CW1, cw1);
     return p;
 }
