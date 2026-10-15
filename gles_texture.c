@@ -84,18 +84,27 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
+    // Fast path: if this texture is already bound to this texture unit, avoid O(N) list traversal
+    if (texture_unit->texture_binding_2d == texture) {
+        return;
+    }
+
+    const GLboolean prev_has_tex = (texture_unit->bound_texture_object != &texture_unit->unbound_texture_object &&
+                                   texture_unit->bound_texture_object != NULL &&
+                                   texture_unit->bound_texture_object->texture_2d != NULL);
+    const xgu_texture_t *prev_xgu = prev_has_tex ? (const xgu_texture_t *)texture_unit->bound_texture_object->texture_2d : NULL;
+    const GLfloat prev_u_scale = prev_xgu ? prev_xgu->u_scale : 1.0f;
+    const GLfloat prev_v_scale = prev_xgu ? prev_xgu->v_scale : 1.0f;
+
     // If the texture name is zero just unbind any texture currently bound to the target
     if (texture == 0) {
         texture_unit->texture_binding_2d = 0;
         texture_unit->bound_texture_object = &texture_unit->unbound_texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
-        context->texture_environment.combiner_dirty = GL_TRUE;
-        context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
-        return;
-    }
-
-    // Fast path: if this texture is already bound to this texture unit, avoid O(N) list traversal
-    if (texture_unit->texture_binding_2d == texture) {
+        if (prev_has_tex) {
+            context->texture_environment.combiner_dirty = GL_TRUE;
+            context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
+        }
         return;
     }
 
@@ -105,8 +114,18 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->texture_binding_2d = texture;
         texture_unit->bound_texture_object = texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
-        context->texture_environment.combiner_dirty = GL_TRUE;
-        context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
+
+        const GLboolean has_tex = (texture_object->texture_2d != NULL);
+        if (has_tex != prev_has_tex) {
+            context->texture_environment.combiner_dirty = GL_TRUE;
+        }
+
+        const xgu_texture_t *cur_xgu = has_tex ? (const xgu_texture_t *)texture_object->texture_2d : NULL;
+        const GLfloat cur_u_scale = cur_xgu ? cur_xgu->u_scale : 1.0f;
+        const GLfloat cur_v_scale = cur_xgu ? cur_xgu->v_scale : 1.0f;
+        if (!prev_has_tex || cur_u_scale != prev_u_scale || cur_v_scale != prev_v_scale) {
+            context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
+        }
         return;
     }
 
@@ -133,6 +152,9 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     // Bind the object to the texture_unit
     texture_unit->texture_binding_2d = texture;
     texture_unit->bound_texture_object = texture_object;
+    if (prev_has_tex) {
+        context->texture_environment.combiner_dirty = GL_TRUE;
+    }
     context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
 
     // Add the object to the context's list
@@ -1149,6 +1171,7 @@ void gliTextureFlush(void)
 {
     gli_context_t *context = gliGetContext();
 
+    uint32_t *pb = NULL;
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
@@ -1161,10 +1184,11 @@ void gliTextureFlush(void)
         // If the texture unit is disabled or there is no texture bound, skip
         if (!texture_unit->texture_2d_enabled || !xgu_texture ||
             texture_object == &texture_unit->unbound_texture_object) {
-            uint32_t *pb = pb_begin();
+            if (!pb) {
+                pb = pb_begin();
+            }
             pb = xgu_set_texture_control0(pb, i, false, 0, 0);
             pb = xgu_set_texture_matrix_enable(pb, i, false);
-            pb_end(pb);
 
             texture_unit->texture_unit_dirty = GL_TRUE;
             context->texture_environment.combiner_dirty = GL_TRUE;
@@ -1184,7 +1208,9 @@ void gliTextureFlush(void)
         const XguTexFilter min_filter = gliEnumToNvTexFilter(texture_object->min_filter);
         const XguTexFilter mag_filter = gliEnumToNvTexFilter(texture_object->mag_filter);
 
-        uint32_t *pb = pb_begin();
+        if (!pb) {
+            pb = pb_begin();
+        }
         pb = xgu_set_texture_offset(pb, i, xgu_texture->data_physical_address);
         pb = xgu_set_texture_format(pb,
                                     i,
@@ -1207,6 +1233,8 @@ void gliTextureFlush(void)
         pb = xgu_set_texture_filter(
             pb, i, 0, XGU_TEXTURE_CONVOLUTION_GAUSSIAN, min_filter, mag_filter, false, false, false, false);
         pb = xgu_set_texture_address(pb, i, u, false, v, false, p, false, false);
+    }
+    if (pb) {
         pb_end(pb);
     }
 

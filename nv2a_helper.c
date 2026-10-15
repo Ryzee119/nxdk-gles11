@@ -620,8 +620,12 @@ void combiner_set_texture_env(void)
 
         for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
             const texture_unit_t *tu = &context->texture_environment.texture_units[i];
-            HASH_MIX(tu->texture_2d_enabled);
-            HASH_MIX(tu->texture_binding_2d); // different texture -> different stage config
+            const GLboolean stage_active =
+                tu->texture_2d_enabled &&
+                tu->bound_texture_object != &tu->unbound_texture_object &&
+                tu->bound_texture_object != NULL &&
+                tu->bound_texture_object->texture_2d != NULL;
+            HASH_MIX(stage_active);
             HASH_MIX(tu->tex_env_mode);
             HASH_MIX(FLOAT4_TO_PACKED_ARGB32(tu->tex_env_color));
             HASH_MIX(tu->coord_replace_oes_enabled);
@@ -672,10 +676,6 @@ void combiner_set_texture_env(void)
 
         const uint32_t s = i;
         shader_program[s] = NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_2D_PROJECTIVE;
-
-        if (!texture_unit->texture_unit_dirty) {
-            continue;
-        }
 
         const GLboolean is_point_sprite =
             texture_unit->coord_replace_oes_enabled && context->rasterization_state.point_sprite_oes_enabled;
@@ -970,10 +970,8 @@ void combiner_set_texture_env(void)
         pb = pb_push1(pb, ALPHA_OCW_REGISTER, ALPHA_OUT);
         stage++;
     }
-    pb_end(pb);
 
     // Deal with clip planes
-    pb = pb_begin();
     const GLboolean any_clip_enabled =
         context->transformation_state.clip_plane_enabled[0] || context->transformation_state.clip_plane_enabled[1] ||
         context->transformation_state.clip_plane_enabled[2] || context->transformation_state.clip_plane_enabled[3];
@@ -1026,10 +1024,8 @@ void combiner_set_texture_env(void)
             break;
         }
     } while (0);
-    pb_end(pb);
 
     // Push passthroughs to all unused stages
-    pb = pb_begin();
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         if (shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_PROGRAM_NONE ||
             shader_program[i] == NV097_SET_SHADER_STAGE_PROGRAM_STAGEn_CLIP_PLANE) {
@@ -1069,10 +1065,8 @@ void combiner_set_texture_env(void)
             pb = pb_push1(pb, ALPHA_OCW_REGISTER, ALPHA_OUT);
         }
     }
-    pb_end(pb);
 
     // Set shader stage programs
-    pb = pb_begin();
     pb = pb_push1(pb,
                   NV097_SET_SHADER_STAGE_PROGRAM,
                   PB_MASK(NV097_SET_SHADER_STAGE_PROGRAM_STAGE0, shader_program[0]) |

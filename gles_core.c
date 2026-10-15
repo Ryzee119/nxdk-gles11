@@ -97,6 +97,9 @@ GL_API void GL_APIENTRY glLogicOp(GLenum opcode)
         return;
     }
 
+    if (context->pixel_ops_state.color_logic_op == opcode) {
+        return;
+    }
     context->pixel_ops_state.color_logic_op = opcode;
 
     uint32_t *pb = pb_begin();
@@ -127,64 +130,86 @@ GL_API void GL_APIENTRY glPixelStorei(GLenum pname, GLint param)
 static void glEnableDisable(GLenum cap, GLboolean enable)
 {
     gli_context_t *context = gliGetContext();
-    uint32_t *pb = pb_begin();
     switch (cap) {
         case GL_ALPHA_TEST:
-            // If enabled, do alpha testing. See glAlphaFunc.
+            if (context->pixel_ops_state.alpha_test_enabled == enable) return;
             context->pixel_ops_state.alpha_test_enabled = enable;
-            pb = xgu_set_alpha_test_enable(pb, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_alpha_test_enable(pb, enable);
+                pb_end(pb);
+            }
             break;
         case GL_BLEND:
-            // If enabled, blend the computed fragment color values with the values in the color buffers. See
-            // glBlendFunc.
+            if (context->pixel_ops_state.blend_enabled == enable) return;
             context->pixel_ops_state.blend_enabled = enable;
-            pb = xgu_set_blend_enable(pb, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_blend_enable(pb, enable);
+                pb_end(pb);
+            }
             break;
         case GL_COLOR_LOGIC_OP:
-            // If enabled, apply the currently selected logical operation to the computed fragment color and color
-            // buffer values. See glLogicOp.
+            if (context->pixel_ops_state.color_logic_op_enabled == enable) return;
             context->pixel_ops_state.color_logic_op_enabled = enable;
-            pb = push_command_boolean(pb, NV097_SET_LOGIC_OP_ENABLE, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = push_command_boolean(pb, NV097_SET_LOGIC_OP_ENABLE, enable);
+                pb_end(pb);
+            }
             break;
-        case GL_CLIP_PLANE0 ... GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES - 1:
-            // If enabled, clip geometry against user-defined clipping plane i. See glClipPlane.
+        case GL_CLIP_PLANE0 ... GL_CLIP_PLANE0 + GLI_MAX_CLIP_PLANES - 1: {
             const GLuint plane = cap - GL_CLIP_PLANE0;
+            if (context->transformation_state.clip_plane_enabled[plane] == enable) return;
             context->transformation_state.clip_plane_enabled[plane] = enable;
             context->transformation_state.clip_plane_dirty = GL_TRUE;
             break;
+        }
         case GL_COLOR_MATERIAL:
-            // When enabled, both the ambient (acm) and diffuse (dcm) properties of both the front and back material are
-            // immediately set to the value of the current color,
+            if (context->lighting_state.color_material_enabled == enable) return;
             context->lighting_state.color_material_enabled = enable;
             context->lighting_state.lighting_model_dirty = GL_TRUE;
             break;
         case GL_CULL_FACE:
-            // If enabled, cull polygons based on their winding in window coordinates. See glCullFace.
+            if (context->rasterization_state.cull_face_enabled == enable) return;
             context->rasterization_state.cull_face_enabled = enable;
-            pb = xgu_set_cull_face_enable(pb, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_cull_face_enable(pb, enable);
+                pb_end(pb);
+            }
             break;
         case GL_DEPTH_TEST:
-            // If enabled, do depth comparisons and update the depth buffer. Note that even if the depth buffer exists
-            // and the depth mask is non-zero, the depth buffer is not updated if the depth test is disabled. See
-            // glDepthFunc and glDepthRange.
+            if (context->pixel_ops_state.depth_test_enabled == enable) return;
             context->pixel_ops_state.depth_test_enabled = enable;
-            pb = xgu_set_depth_test_enable(pb, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_depth_test_enable(pb, enable);
+                pb_end(pb);
+            }
             break;
         case GL_DITHER:
-            // If enabled, dither color components before they are written to the color buffer.
+            if (context->pixel_ops_state.dither_enabled == enable) return;
             context->pixel_ops_state.dither_enabled = enable;
-            pb = xgu_set_dither_enable(pb, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_dither_enable(pb, enable);
+                pb_end(pb);
+            }
             break;
         case GL_FOG:
-            // If enabled, blend a fog color into the posttexturing color. See glFog.
-                context->coloring_state.fog_enabled = enable;
-            pb = xgu_set_fog_enable(pb, enable);
-            pb = xgu_set_fog_gen_mode(pb, XGU_FOG_GEN_MODE_RADIAL); // No API to change, this matches OpenGL look
-            pb = combiner_specular_fog_config(
-                pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
+            if (context->coloring_state.fog_enabled == enable) return;
+            context->coloring_state.fog_enabled = enable;
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_fog_enable(pb, enable);
+                pb = xgu_set_fog_gen_mode(pb, XGU_FOG_GEN_MODE_RADIAL);
+                pb = combiner_specular_fog_config(
+                    pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
+                pb_end(pb);
+            }
             break;
         case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS - 1: {
-            // If enabled, include light i in the evaluation of the lighting equation. See glLightModel and glLight.
             const GLuint light = cap - GL_LIGHT0;
             if (context->lighting_state.lights[light].enabled != enable) {
                 context->lighting_state.lights[light].enabled = enable;
@@ -193,135 +218,151 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             break;
         }
         case GL_LIGHTING:
-            // If enabled, use the current lighting parameters to compute the vertex color. Otherwise, simply associate
-            // the current color with each vertex. See glMaterial, glLightModel, and glLight.
-                context->lighting_state.lighting_enabled = enable;
+            if (context->lighting_state.lighting_enabled == enable) return;
+            context->lighting_state.lighting_enabled = enable;
+            {
+                uint32_t *pb = pb_begin();
                 pb = xgu_set_lighting_enable(pb, enable);
                 pb = xgu_set_specular_enable(pb, enable);
-            pb = combiner_specular_fog_config(
-                pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
+                pb = combiner_specular_fog_config(
+                    pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
+                pb_end(pb);
+            }
             break;
         case GL_LINE_SMOOTH:
-            // If enabled, draw lines with correct filtering. Otherwise, draw aliased lines. See glLineWidth.
+            if (context->rasterization_state.line_smooth_enabled == enable) return;
             context->rasterization_state.line_smooth_enabled = enable;
-            pb = push_command_boolean(pb, NV097_SET_LINE_SMOOTH_ENABLE, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = push_command_boolean(pb, NV097_SET_LINE_SMOOTH_ENABLE, enable);
+                pb_end(pb);
+            }
             break;
         case GL_MULTISAMPLE:
-            // If enabled, use multiple fragment samples in computing the final color of a pixel. See glSampleCoverage.
-            // NV097_SET_SURFACE_FORMAT_ANTI_ALIASING?
             context->multisampling_state.multisample_enabled = enable;
             break;
         case GL_NORMALIZE:
-            // If enabled, normal vectors are normalized to unit length after transformation and before lighting. This
-            // method is generally less efficient than GL_RESCALE_NORMAL. See glNormal and glNormalPointer.
+            if (context->transformation_state.normalize_enabled == enable) return;
             context->transformation_state.normalize_enabled = enable;
-            pb = xgu_set_normalization_enable(pb,
-                                              context->transformation_state.rescale_normal_enabled ||
-                                                  context->transformation_state.normalize_enabled);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_normalization_enable(pb,
+                                                  context->transformation_state.rescale_normal_enabled ||
+                                                      context->transformation_state.normalize_enabled);
+                pb_end(pb);
+            }
             break;
         case GL_POINT_SMOOTH:
-            // If enabled, draw points with proper filtering. Otherwise, draw aliased points. See glPointSize.
+            if (context->rasterization_state.point_smooth_enabled == enable) return;
             context->rasterization_state.point_smooth_enabled = enable;
-            pb = push_command_boolean(pb, NV097_SET_POINT_SMOOTH_ENABLE, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = push_command_boolean(pb, NV097_SET_POINT_SMOOTH_ENABLE, enable);
+                pb_end(pb);
+            }
             break;
         case GL_POINT_SPRITE_OES:
-            // If enabled, point sprites are enabled. See glPointSize and glTexEnv
+            if (context->rasterization_state.point_sprite_oes_enabled == enable) return;
             context->rasterization_state.point_sprite_oes_enabled = enable;
-            pb = push_command_boolean(
-                pb, NV097_SET_POINT_SMOOTH_ENABLE, enable); // Seems to need to be enabled for point sprite
-            pb = push_command_boolean(pb, NV097_SET_POINT_PARAMS_ENABLE, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = push_command_boolean(
+                    pb, NV097_SET_POINT_SMOOTH_ENABLE, enable);
+                pb = push_command_boolean(pb, NV097_SET_POINT_PARAMS_ENABLE, enable);
+                pb_end(pb);
+            }
             break;
         case GL_POLYGON_OFFSET_FILL:
-            // If enabled, an offset is added to depth values of a polygon's fragments before the depth comparison is
-            // performed. See glPolygonOffset.
+            if (context->rasterization_state.polygon_offset_fill_enabled == enable) return;
             context->rasterization_state.polygon_offset_fill_enabled = enable;
-            pb = push_command_boolean(pb, NV097_SET_POLY_OFFSET_FILL_ENABLE, enable);
+            {
+                uint32_t *pb = pb_begin();
+                pb = push_command_boolean(pb, NV097_SET_POLY_OFFSET_FILL_ENABLE, enable);
+                pb_end(pb);
+            }
             break;
         case GL_RESCALE_NORMAL:
-            // If enabled, normal vectors are scaled after transformation and before lighting by a factor computed from
-            // the modelview matrix. If the modelview matrix scales space uniformly, this has the effect of restoring
-            // the transformed normal to unit length. This method is generally more efficient than GL_NORMALIZE. See
-            // glNormal and glNormalPointer.
+            if (context->transformation_state.rescale_normal_enabled == enable) return;
             context->transformation_state.rescale_normal_enabled = enable;
-
-            // Just use nv2a normalization feature
-            pb = xgu_set_normalization_enable(pb,
-                                              context->transformation_state.rescale_normal_enabled ||
-                                                  context->transformation_state.normalize_enabled);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_normalization_enable(pb,
+                                                  context->transformation_state.rescale_normal_enabled ||
+                                                      context->transformation_state.normalize_enabled);
+                pb_end(pb);
+            }
             break;
         case GL_SAMPLE_ALPHA_TO_COVERAGE:
-            // If enabled, compute a temporary coverage value where each bit is determined by the alpha value at the
-            // corresponding sample location. The temporary coverage value is then ANDed with the fragment coverage
-            // value.
             context->multisampling_state.sample_alpha_to_coverage_enabled = enable;
-            // FIXME
             break;
         case GL_SAMPLE_ALPHA_TO_ONE:
-            // If enabled, each sample alpha value is replaced by the maximum representable alpha value.
             context->multisampling_state.sample_alpha_to_one_enabled = enable;
-            // FIXME
             break;
         case GL_SAMPLE_COVERAGE:
-            // If enabled, the fragment's coverage is ANDed with the temporary coverage value. If
-            // GL_SAMPLE_COVERAGE_INVERT is set to GL_TRUE, invert the coverage value. See glSampleCoverage.
             context->multisampling_state.sample_coverage_enabled = enable;
-            // FIXME
             break;
         case GL_SCISSOR_TEST:
-            // If enabled, discard fragments that are outside the scissor rectangle. See glScissor.
+            if (context->pixel_ops_state.scissor_test_enabled == enable) return;
             context->pixel_ops_state.scissor_test_enabled = enable;
-            if (!enable) {
-                // Can't disable so max it out
-                pb = xgu_set_scissor_rect(pb, false, 0, 0, 4095, 4095);
-            } else {
-                GLint hw_x = context->pixel_ops_state.scissor_box[0];
-                GLint hw_y = context->pixel_ops_state.scissor_box[1];
-                GLint hw_w = context->pixel_ops_state.scissor_box[2];
-                GLint hw_h = context->pixel_ops_state.scissor_box[3];
+            {
+                uint32_t *pb = pb_begin();
+                if (!enable) {
+                    pb = xgu_set_scissor_rect(pb, false, 0, 0, 4095, 4095);
+                } else {
+                    GLint hw_x = context->pixel_ops_state.scissor_box[0];
+                    GLint hw_y = context->pixel_ops_state.scissor_box[1];
+                    GLint hw_w = context->pixel_ops_state.scissor_box[2];
+                    GLint hw_h = context->pixel_ops_state.scissor_box[3];
 
-                gliCalculateHardwareScissor(context, &hw_x, &hw_y, &hw_w, &hw_h);
+                    gliCalculateHardwareScissor(context, &hw_x, &hw_y, &hw_w, &hw_h);
 
-                pb = xgu_set_scissor_rect(pb, false, hw_x, hw_y, hw_w, hw_h);
+                    pb = xgu_set_scissor_rect(pb, false, hw_x, hw_y, hw_w, hw_h);
+                }
+                pb_end(pb);
             }
             break;
         case GL_STENCIL_TEST:
-            // If enabled, do stencil testing and update the stencil buffer. See glStencilFunc, glStencilMask, and
-            // glStencilOp.
+            if (context->pixel_ops_state.stencil_test_enabled == enable) return;
             context->pixel_ops_state.stencil_test_enabled = enable;
-            pb = xgu_set_stencil_test_enable(pb, enable);
-            if (!enable) {
-                pb = xgu_set_stencil_func(pb, XGU_FUNC_ALWAYS);
-                pb = xgu_set_stencil_func_ref(pb, 0);
-                pb = xgu_set_stencil_func_mask(pb, 0xFF);
-                pb = xgu_set_stencil_op_fail(pb, XGU_STENCIL_OP_KEEP);
-                pb = xgu_set_stencil_op_zfail(pb, XGU_STENCIL_OP_KEEP);
-                pb = xgu_set_stencil_op_zpass(pb, XGU_STENCIL_OP_KEEP);
-                pb = xgu_set_stencil_mask(pb, 0xFF);
-            } else {
-                const pixel_ops_state_t *pos = &context->pixel_ops_state;
-                pb = xgu_set_stencil_func(pb, gliEnumToNvFunc(pos->stencil_func));
-                pb = xgu_set_stencil_func_ref(pb, pos->stencil_ref);
-                pb = xgu_set_stencil_func_mask(pb, pos->stencil_value_mask);
-                pb = xgu_set_stencil_op_fail(pb, gliEnumToNvStencilOp(pos->stencil_fail_op));
-                pb = xgu_set_stencil_op_zfail(pb, gliEnumToNvStencilOp(pos->stencil_zfail_op));
-                pb = xgu_set_stencil_op_zpass(pb, gliEnumToNvStencilOp(pos->stencil_zpass_op));
-                pb = xgu_set_stencil_mask(pb, context->framebuffer_control.stencil_writemask);
+            {
+                uint32_t *pb = pb_begin();
+                pb = xgu_set_stencil_test_enable(pb, enable);
+                if (!enable) {
+                    pb = xgu_set_stencil_func(pb, XGU_FUNC_ALWAYS);
+                    pb = xgu_set_stencil_func_ref(pb, 0);
+                    pb = xgu_set_stencil_func_mask(pb, 0xFF);
+                    pb = xgu_set_stencil_op_fail(pb, XGU_STENCIL_OP_KEEP);
+                    pb = xgu_set_stencil_op_zfail(pb, XGU_STENCIL_OP_KEEP);
+                    pb = xgu_set_stencil_op_zpass(pb, XGU_STENCIL_OP_KEEP);
+                    pb = xgu_set_stencil_mask(pb, 0xFF);
+                } else {
+                    const pixel_ops_state_t *pos = &context->pixel_ops_state;
+                    pb = xgu_set_stencil_func(pb, gliEnumToNvFunc(pos->stencil_func));
+                    pb = xgu_set_stencil_func_ref(pb, pos->stencil_ref);
+                    pb = xgu_set_stencil_func_mask(pb, pos->stencil_value_mask);
+                    pb = xgu_set_stencil_op_fail(pb, gliEnumToNvStencilOp(pos->stencil_fail_op));
+                    pb = xgu_set_stencil_op_zfail(pb, gliEnumToNvStencilOp(pos->stencil_zfail_op));
+                    pb = xgu_set_stencil_op_zpass(pb, gliEnumToNvStencilOp(pos->stencil_zpass_op));
+                    pb = xgu_set_stencil_mask(pb, context->framebuffer_control.stencil_writemask);
+                }
+                pb_end(pb);
             }
             break;
-        case GL_TEXTURE_2D:
-            // If enabled, two-dimensional texturing is performed for the active texture unit. See glActiveTexture,
-            // glTexImage2D, glCompressedTexImage2D, and glCopyTexImage2D.
+        case GL_TEXTURE_2D: {
             const GLuint texture = context->texture_environment.server_active_texture - GL_TEXTURE0;
+            if (context->texture_environment.texture_units[texture].texture_2d_enabled == enable) {
+                return;
+            }
             context->texture_environment.texture_units[texture].texture_2d_enabled = enable;
             context->texture_environment.texture_units[texture].texture_unit_dirty = GL_TRUE;
             context->texture_environment.combiner_dirty = GL_TRUE;
             context->transformation_state.texture_matrix_dirty[texture] = GL_TRUE;
             break;
+        }
         default:
             gliSetError(GL_INVALID_ENUM);
             break;
     }
-    pb_end(pb);
 }
 
 GL_API void GL_APIENTRY glEnable(GLenum cap)
@@ -399,6 +440,12 @@ GL_API GLboolean GL_APIENTRY glIsEnabled(GLenum cap)
 GL_API void GL_APIENTRY glColorMask(GLboolean r, GLboolean g, GLboolean b, GLboolean a)
 {
     gli_context_t *context = gliGetContext();
+    if (context->framebuffer_control.color_mask[0] == r &&
+        context->framebuffer_control.color_mask[1] == g &&
+        context->framebuffer_control.color_mask[2] == b &&
+        context->framebuffer_control.color_mask[3] == a) {
+        return;
+    }
     context->framebuffer_control.color_mask[0] = r;
     context->framebuffer_control.color_mask[1] = g;
     context->framebuffer_control.color_mask[2] = b;
@@ -425,6 +472,9 @@ GL_API void GL_APIENTRY glColorMask(GLboolean r, GLboolean g, GLboolean b, GLboo
 GL_API void GL_APIENTRY glDepthMask(GLboolean flag)
 {
     gli_context_t *context = gliGetContext();
+    if (context->framebuffer_control.depth_writemask == flag) {
+        return;
+    }
     context->framebuffer_control.depth_writemask = flag;
     uint32_t *pb = pb_begin();
     pb = xgu_set_depth_mask(pb, flag);
@@ -549,6 +599,9 @@ GL_API void GL_APIENTRY glShadeModel(GLenum mode)
         return;
     }
 
+    if (context->coloring_state.shade_model == mode) {
+        return;
+    }
     context->coloring_state.shade_model = mode;
 
     uint32_t *pb = pb_begin();

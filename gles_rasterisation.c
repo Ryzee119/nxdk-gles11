@@ -10,6 +10,10 @@ GL_API void GL_APIENTRY glCullFace(GLenum mode)
         return;
     }
 
+    if (context->rasterization_state.cull_face_mode == mode) {
+        return;
+    }
+
     context->rasterization_state.cull_face_mode = mode;
 
     uint32_t *pb = pb_begin();
@@ -27,6 +31,10 @@ GL_API void GL_APIENTRY glFrontFace(GLenum mode)
         return;
     }
 
+    if (context->rasterization_state.cull_front_face == mode) {
+        return;
+    }
+
     context->rasterization_state.cull_front_face = mode;
 
     uint32_t *pb = pb_begin();
@@ -37,6 +45,11 @@ GL_API void GL_APIENTRY glFrontFace(GLenum mode)
 GL_API void GL_APIENTRY glPolygonOffset(GLfloat factor, GLfloat units)
 {
     gli_context_t *context = gliGetContext();
+
+    if (context->rasterization_state.polygon_offset_factor == factor &&
+        context->rasterization_state.polygon_offset_units == units) {
+        return;
+    }
 
     context->rasterization_state.polygon_offset_factor = factor;
     context->rasterization_state.polygon_offset_units = units;
