@@ -32,6 +32,7 @@ void gliStagingInit(void)
     assert(pool != NULL);
 
     context->staging_arena_pool = pool;
+    context->staging_arena_phys = MmGetPhysicalAddress(pool);
     arena_init(pool, GLI_STAGING_ARENA_SIZE, &context->staging_arena);
 
     frame_staged_bytes[0] = frame_staged_bytes[1] = cur_staged_bytes = frame_idx = 0;
@@ -142,6 +143,20 @@ static void *stage_attribute(arena_t *arena,
     return dst;
 }
 
+static inline uint32_t *push_staged_attrib(uint32_t *p,
+                                           gli_context_t *context,
+                                           unsigned int index,
+                                           XguVertexArrayType format,
+                                           unsigned int size,
+                                           unsigned int stride,
+                                           const void *staged)
+{
+    uint32_t phys = context->staging_arena_phys + (uint32_t)((const uint8_t *)staged - (const uint8_t *)context->staging_arena_pool);
+    p = xgu_set_vertex_data_array_format(p, index, format, size, stride);
+    p = xgu_set_vertex_data_array_offset(p, index, (const void *)(uintptr_t)phys);
+    return p;
+}
+
 GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
 {
     gli_context_t *context = gliGetContext();
@@ -155,6 +170,8 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
     staged_range_t ranges[MAX_STAGED_RANGES];
     int range_count = 0;
 
+    uint32_t *pb = pb_begin();
+
     // --- Vertex array ---
     if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding == 0 && vad->vertex_array_ptr != NULL) {
         size_t elem_size = (size_t)(vad->vertex_array_size * gliEnumtoByteSize(vad->vertex_array_type));
@@ -162,10 +179,11 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
         const void *src_ptr = (const uint8_t *)vad->vertex_array_ptr + (size_t)first * stride;
         void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
+            pb_end(pb);
             goto out_of_memory;
         }
         XguVertexArrayType format = gliEnumToNvType(vad->vertex_array_type);
-        xgux_set_attrib_pointer(XGU_VERTEX_ARRAY, format, vad->vertex_array_size, stride, staged);
+        pb = push_staged_attrib(pb, context, XGU_VERTEX_ARRAY, format, vad->vertex_array_size, stride, staged);
         vad->vertex_array_dirty = GL_FALSE;
     }
 
@@ -176,10 +194,11 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
         const void *src_ptr = (const uint8_t *)vad->normal_array_ptr + (size_t)first * stride;
         void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
+            pb_end(pb);
             goto out_of_memory;
         }
         XguVertexArrayType format = gliEnumToNvType(vad->normal_array_type);
-        xgux_set_attrib_pointer(XGU_NORMAL_ARRAY, format, 3, stride, staged);
+        pb = push_staged_attrib(pb, context, XGU_NORMAL_ARRAY, format, 3, stride, staged);
         vad->normal_array_dirty = GL_FALSE;
     }
 
@@ -190,10 +209,11 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
         const void *src_ptr = (const uint8_t *)vad->color_array_ptr + (size_t)first * stride;
         void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
+            pb_end(pb);
             goto out_of_memory;
         }
         XguVertexArrayType format = gliEnumToNvType(vad->color_array_type);
-        xgux_set_attrib_pointer(XGU_COLOR_ARRAY, format, vad->color_array_size, stride, staged);
+        pb = push_staged_attrib(pb, context, XGU_COLOR_ARRAY, format, vad->color_array_size, stride, staged);
         vad->color_array_dirty = GL_FALSE;
     }
 
@@ -208,10 +228,11 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
             void *staged = stage_attribute(
                 arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
             if (!staged) {
+                pb_end(pb);
                 goto out_of_memory;
             }
             XguVertexArrayType format = gliEnumToNvType(vad->texcoord_array_type[i]);
-            xgux_set_attrib_pointer(XGU_TEXCOORD0_ARRAY + i, format, vad->texcoord_array_size[i], stride, staged);
+            pb = push_staged_attrib(pb, context, XGU_TEXCOORD0_ARRAY + i, format, vad->texcoord_array_size[i], stride, staged);
             vad->texcoord_array_dirty[i] = GL_FALSE;
         }
     }
@@ -225,19 +246,18 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
         void *staged =
             stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
+            pb_end(pb);
             goto out_of_memory;
         }
         XguVertexArrayType format = gliEnumToNvType(vad->point_size_array_type);
-        xgux_set_attrib_pointer(XGU_POINT_SIZE_ARRAY, format, 1, stride, staged);
+        pb = push_staged_attrib(pb, context, XGU_POINT_SIZE_ARRAY, format, 1, stride, staged);
         vad->point_size_array_dirty = GL_FALSE;
     }
 
-    __asm__ __volatile__("sfence");
     if (range_count > 0) {
-        uint32_t *pb = pb_begin();
         pb = pb_push1(pb, NV097_BREAK_VERTEX_BUFFER_CACHE, 0);
-        pb_end(pb);
     }
+    pb_end(pb);
 
     return GL_TRUE;
 

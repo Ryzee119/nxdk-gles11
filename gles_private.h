@@ -480,6 +480,7 @@ typedef struct
     // GPU staging arena for client-side vertex arrays
     arena_t staging_arena;
     void *staging_arena_pool; // MmAllocateContiguousMemoryEx backing memory
+    uint32_t staging_arena_phys;
 
     // OES_framebuffer_object state
     GLuint fbo_binding;

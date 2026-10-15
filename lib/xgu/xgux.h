@@ -34,14 +34,14 @@ void xgux_draw_elements16(XguPrimitiveType mode, const uint16_t* elements, unsig
     uint32_t *p = pb_begin();
     p = xgu_begin(p, mode);
 
-    /* Submit elements in pairs if possible */
     unsigned int pair_count = count / 2;
     unsigned int i = 0;
     while(i < pair_count) {
-
-        /* Start next batch */
-        pb_end(p);
-        p = pb_begin();
+        if (i > 0) {
+            /* Start next batch */
+            pb_end(p);
+            p = pb_begin();
+        }
 
         unsigned int batch_pair_count = MIN(pair_count - i, MAX_BATCH_ELEMENTS);
         p = xgu_element16(p, &elements[i * 2], batch_pair_count * 2);
