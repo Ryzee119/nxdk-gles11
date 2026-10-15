@@ -25,10 +25,10 @@ void gliFlushStateChange(void)
 {
     gliFBOFlush();
     gliTransformFlush();
-    gliFogFlush();
     gliTextureFlush();
     gliPointParamsFlush();
     gliLightingFlush();
+    gliFogFlush();
     gliArrayFlush();
 }
 
@@ -68,7 +68,7 @@ GL_API void GL_APIENTRY glHint(GLenum target, GLenum mode)
 
     switch (target) {
         case GL_FOG_HINT:
-            context->hints_state.fog_hint = mode;
+                context->hints_state.fog_hint = mode;
             break;
         case GL_GENERATE_MIPMAP_HINT:
             context->hints_state.generate_mipmap_hint = mode;
@@ -177,7 +177,7 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
             break;
         case GL_FOG:
             // If enabled, blend a fog color into the posttexturing color. See glFog.
-            context->coloring_state.fog_enabled = enable;
+                context->coloring_state.fog_enabled = enable;
             pb = xgu_set_fog_enable(pb, enable);
             pb = xgu_set_fog_gen_mode(pb, XGU_FOG_GEN_MODE_RADIAL); // No API to change, this matches OpenGL look
             pb = combiner_specular_fog_config(
@@ -195,9 +195,9 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
         case GL_LIGHTING:
             // If enabled, use the current lighting parameters to compute the vertex color. Otherwise, simply associate
             // the current color with each vertex. See glMaterial, glLightModel, and glLight.
-            context->lighting_state.lighting_enabled = enable;
-            pb = xgu_set_lighting_enable(pb, enable);
-            pb = xgu_set_specular_enable(pb, enable);
+                context->lighting_state.lighting_enabled = enable;
+                pb = xgu_set_lighting_enable(pb, enable);
+                pb = xgu_set_specular_enable(pb, enable);
             pb = combiner_specular_fog_config(
                 pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
             break;
@@ -602,6 +602,12 @@ void glContextInit(GLint window_width, GLint window_height)
     uint32_t *pb = pb_begin();
     pb = combiner_specular_fog_config(pb, GL_FALSE, GL_FALSE);
     pb = push_command_parameter(pb, NV097_SET_PROVOKING_VERTEX, NV097_SET_PROVOKING_VERTEX_LAST);
+    // Initialize default fog plane (0, 0, 1, 0) matching MoInitKelvin:723 / vshader.cpp:1079
+    pb = push_command(pb, NV097_SET_FOG_PLANE, 4);
+    pb = push_float(pb, 0.0f);
+    pb = push_float(pb, 0.0f);
+    pb = push_float(pb, 1.0f);
+    pb = push_float(pb, 0.0f);
     pb_end(pb);
 
     /* --- Table 6.18: Pixel store --- */
