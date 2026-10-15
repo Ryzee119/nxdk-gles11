@@ -12,6 +12,11 @@ GL_API void GL_APIENTRY glAlphaFunc(GLenum func, GLfloat ref)
 
     ref = glm_clamp(ref, 0.0f, 1.0f);
 
+    if (context->pixel_ops_state.alpha_test_func == func &&
+        context->pixel_ops_state.alpha_test_ref == ref) {
+        return;
+    }
+
     context->pixel_ops_state.alpha_test_func = func;
     context->pixel_ops_state.alpha_test_ref = ref;
 
@@ -38,6 +43,11 @@ GL_API void GL_APIENTRY glBlendFunc(GLenum sfactor, GLenum dfactor)
     if (xgu_sfactor == -1 || xgu_dfactor == -1 || sfactor == GL_SRC_COLOR || sfactor == GL_ONE_MINUS_SRC_COLOR ||
         dfactor == GL_DST_COLOR || dfactor == GL_ONE_MINUS_DST_COLOR || dfactor == GL_SRC_ALPHA_SATURATE) {
         gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (context->pixel_ops_state.blend_src == sfactor &&
+        context->pixel_ops_state.blend_dst == dfactor) {
         return;
     }
 
@@ -70,6 +80,10 @@ GL_API void GL_APIENTRY glBlendEquationOES(GLenum mode)
             return;
     }
 
+    if (context->pixel_ops_state.blend_equation == mode) {
+        return;
+    }
+
     context->pixel_ops_state.blend_equation = mode;
 
     uint32_t *pb = pb_begin();
@@ -84,6 +98,10 @@ GL_API void GL_APIENTRY glDepthFunc(GLenum func)
     XguFuncType xgu_func = gliEnumToNvFunc(func);
     if (xgu_func == -1) {
         gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (context->pixel_ops_state.depth_func == func) {
         return;
     }
 
