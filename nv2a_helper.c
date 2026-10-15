@@ -670,6 +670,7 @@ void combiner_set_texture_env(void)
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
 
         if (!texture_unit->texture_2d_enabled ||
+            texture_unit->bound_texture_object == NULL ||
             texture_unit->bound_texture_object == &texture_unit->unbound_texture_object) {
             continue;
         }

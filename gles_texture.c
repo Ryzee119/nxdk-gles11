@@ -85,7 +85,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
     texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
 
     // Fast path: if this texture is already bound to this texture unit, avoid O(N) list traversal
-    if (texture_unit->texture_binding_2d == texture) {
+    if (texture_unit->texture_binding_2d == texture && texture_unit->bound_texture_object != NULL) {
         return;
     }
 
@@ -1175,6 +1175,10 @@ void gliTextureFlush(void)
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         texture_unit_t *texture_unit = &context->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
+        if (!texture_object) {
+            texture_object = &texture_unit->unbound_texture_object;
+            texture_unit->bound_texture_object = texture_object;
+        }
         xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
         if (!texture_object->texture_object_dirty && !texture_unit->texture_unit_dirty) {

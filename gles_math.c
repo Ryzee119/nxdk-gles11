@@ -61,14 +61,35 @@ void glm_mat4_mul(const mat4 m1, const mat4 m2, mat4 dest)
     __m128 col2 = _mm_loadu_ps(m1[2]);
     __m128 col3 = _mm_loadu_ps(m1[3]);
 
-    for (int i = 0; i < 4; i++) {
-        __m128 b = _mm_loadu_ps(m2[i]);
-        __m128 r = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
-        r = _mm_add_ps(r, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
-        r = _mm_add_ps(r, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
-        r = _mm_add_ps(r, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
-        _mm_storeu_ps(dest[i], r);
-    }
+    __m128 r0, r1, r2, r3;
+    __m128 b = _mm_loadu_ps(m2[0]);
+    r0 = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+    r0 = _mm_add_ps(r0, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+    r0 = _mm_add_ps(r0, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
+    r0 = _mm_add_ps(r0, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
+
+    b = _mm_loadu_ps(m2[1]);
+    r1 = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+    r1 = _mm_add_ps(r1, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+    r1 = _mm_add_ps(r1, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
+    r1 = _mm_add_ps(r1, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
+
+    b = _mm_loadu_ps(m2[2]);
+    r2 = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+    r2 = _mm_add_ps(r2, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+    r2 = _mm_add_ps(r2, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
+    r2 = _mm_add_ps(r2, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
+
+    b = _mm_loadu_ps(m2[3]);
+    r3 = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+    r3 = _mm_add_ps(r3, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+    r3 = _mm_add_ps(r3, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
+    r3 = _mm_add_ps(r3, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
+
+    _mm_storeu_ps(dest[0], r0);
+    _mm_storeu_ps(dest[1], r1);
+    _mm_storeu_ps(dest[2], r2);
+    _mm_storeu_ps(dest[3], r3);
 }
 
 void glm_mat4_mulN(const mat4 *matrices[], int count, mat4 dest)
