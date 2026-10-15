@@ -68,7 +68,10 @@ GL_API void GL_APIENTRY glHint(GLenum target, GLenum mode)
 
     switch (target) {
         case GL_FOG_HINT:
+            if (context->hints_state.fog_hint != mode) {
                 context->hints_state.fog_hint = mode;
+                context->coloring_state.fog_dirty = GL_TRUE;
+            }
             break;
         case GL_GENERATE_MIPMAP_HINT:
             context->hints_state.generate_mipmap_hint = mode;
@@ -200,14 +203,7 @@ static void glEnableDisable(GLenum cap, GLboolean enable)
         case GL_FOG:
             if (context->coloring_state.fog_enabled == enable) return;
             context->coloring_state.fog_enabled = enable;
-            {
-                uint32_t *pb = pb_begin();
-                pb = xgu_set_fog_enable(pb, enable);
-                pb = xgu_set_fog_gen_mode(pb, XGU_FOG_GEN_MODE_RADIAL);
-                pb = combiner_specular_fog_config(
-                    pb, context->coloring_state.fog_enabled, context->lighting_state.lighting_enabled);
-                pb_end(pb);
-            }
+            context->coloring_state.fog_dirty = GL_TRUE;
             break;
         case GL_LIGHT0 ... GL_LIGHT0 + GLI_MAX_LIGHTS - 1: {
             const GLuint light = cap - GL_LIGHT0;
@@ -660,11 +656,7 @@ void glContextInit(GLint window_width, GLint window_height)
     pb = combiner_specular_fog_config(pb, GL_FALSE, GL_FALSE);
     pb = push_command_parameter(pb, NV097_SET_PROVOKING_VERTEX, NV097_SET_PROVOKING_VERTEX_LAST);
     // Initialize default fog plane (0, 0, 1, 0) matching MoInitKelvin:723 / vshader.cpp:1079
-    pb = push_command(pb, NV097_SET_FOG_PLANE, 4);
-    pb = push_float(pb, 0.0f);
-    pb = push_float(pb, 0.0f);
-    pb = push_float(pb, 1.0f);
-    pb = push_float(pb, 0.0f);
+    pb = xgu_set_fog_plane(pb, 0.0f, 0.0f, 1.0f, 0.0f);
     pb_end(pb);
 
     /* --- Table 6.18: Pixel store --- */

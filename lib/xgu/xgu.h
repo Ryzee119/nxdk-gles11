@@ -567,6 +567,16 @@ uint32_t* xgu_set_fog_params(uint32_t* p, float bias, float scale) {
 }
 
 XGU_API
+uint32_t* xgu_set_fog_plane(uint32_t* p, float a, float b, float c, float d) {
+    p = push_command(p, NV097_SET_FOG_PLANE, 4);
+    p = push_float(p, a);
+    p = push_float(p, b);
+    p = push_float(p, c);
+    p = push_float(p, d);
+    return p;
+}
+
+XGU_API
 uint32_t* xgu_set_model_view_matrix(uint32_t* p, uint32_t weight_index, const float m[4*4]) {
     assert(weight_index < XGU_WEIGHT_COUNT);
     return push_command_matrix4x4(p, NV097_SET_MODEL_VIEW_MATRIX + weight_index*(4*4)*4, m);
