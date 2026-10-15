@@ -196,6 +196,8 @@ typedef struct
     GLint viewport[4];    // X,Y,Width,Height
     mat4 viewport_matrix; // Computed from viewport
     GLboolean viewport_dirty;
+    mat4 vp_matrix;
+    GLboolean vp_matrix_dirty;
     GLfloat depth_range[2];
     GLboolean depth_range_dirty;
     GLint modelview_matrix_stack_depth;

@@ -1,4 +1,5 @@
 #include "gles_private.h"
+#include <xmmintrin.h>
 
 const vec4 GLM_VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 const vec4 GLM_VEC4_ONE = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -45,27 +46,29 @@ void glm_mat4_identity(mat4 mat)
 
 void glm_mat4_make(const float *src, mat4 dest)
 {
-    if (src != (const float *)dest) {
-        gli_memcpy(dest, src, 16 * sizeof(float));
-    }
+    __builtin_memcpy(dest, src, sizeof(mat4));
 }
 
 void glm_mat4_copy(const mat4 mat, mat4 dest)
 {
-    if (mat != dest) {
-        gli_memcpy(dest, mat, 16 * sizeof(float));
-    }
+    __builtin_memcpy(dest, mat, sizeof(mat4));
 }
 
 void glm_mat4_mul(const mat4 m1, const mat4 m2, mat4 dest)
 {
-    mat4 res;
-    for (int i = 0; i < 4; i++) {     // col of m2
-        for (int j = 0; j < 4; j++) { // row of m1
-            res[i][j] = m1[0][j] * m2[i][0] + m1[1][j] * m2[i][1] + m1[2][j] * m2[i][2] + m1[3][j] * m2[i][3];
-        }
+    __m128 col0 = _mm_loadu_ps(m1[0]);
+    __m128 col1 = _mm_loadu_ps(m1[1]);
+    __m128 col2 = _mm_loadu_ps(m1[2]);
+    __m128 col3 = _mm_loadu_ps(m1[3]);
+
+    for (int i = 0; i < 4; i++) {
+        __m128 b = _mm_loadu_ps(m2[i]);
+        __m128 r = _mm_mul_ps(col0, _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+        r = _mm_add_ps(r, _mm_mul_ps(col1, _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+        r = _mm_add_ps(r, _mm_mul_ps(col2, _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
+        r = _mm_add_ps(r, _mm_mul_ps(col3, _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 3, 3, 3))));
+        _mm_storeu_ps(dest[i], r);
     }
-    glm_mat4_copy(res, dest);
 }
 
 void glm_mat4_mulN(const mat4 *matrices[], int count, mat4 dest)
