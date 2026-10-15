@@ -2,7 +2,7 @@
 #include <stb_sprintf.h>
 
 static int gl_swap_interval = 1;
-static GLboolean gl_show_fps = GL_TRUE;
+static GLboolean gl_show_fps = GL_FALSE;
 
 void glSwapInterval(int interval)
 {
@@ -72,9 +72,6 @@ void glFlipNV2A()
     if (gl_swap_interval > 0) {
         for (int i = 0; i < gl_swap_interval; i++) {
             pb_wait_for_vbl();
-        }
-        while (pb_busy()) {
-            NtYieldExecution();
         }
     }
 
