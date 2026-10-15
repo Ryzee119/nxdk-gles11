@@ -641,6 +641,10 @@ void glContextInit(GLint window_width, GLint window_height)
 {
     gli_context_t *context = gliGetContext();
     gli_memset(context, 0, sizeof(*context));
+    for (GLint i = 0; i < GLI_MAX_TEXTURE_UNITS; ++i) {
+        context->texture_environment.texture_units[i].bound_texture_object =
+            &context->texture_environment.texture_units[i].unbound_texture_object;
+    }
 
     while (pb_init() < 0) {
         gliDebugF("[nxdk renderer] pbkit initialization failed, retrying...\n");
