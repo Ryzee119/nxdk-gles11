@@ -127,12 +127,15 @@ void gliFogFlush(void)
                 return;
         }
 
-        const XguFogGenMode gen_mode = (context->hints_state.fog_hint == GL_FASTEST)
-                                           ? XGU_FOG_GEN_MODE_PLANAR
-                                           : XGU_FOG_GEN_MODE_RADIAL;
+        const XguFogGenMode gen_mode = (context->hints_state.fog_hint == GL_NICEST)
+                                           ? XGU_FOG_GEN_MODE_RADIAL
+                                           : XGU_FOG_GEN_MODE_PLANAR;
 
         // Atomically emit all fog state and final combiner, matching lazy.cpp:565-606
         pb = xgu_set_fog_gen_mode(pb, gen_mode);
+        if (gen_mode == XGU_FOG_GEN_MODE_PLANAR) {
+            pb = xgu_set_fog_plane(pb, 0.0f, 0.0f, 1.0f, 0.0f);
+        }
         pb = xgu_set_fog_enable(pb, true);
         pb = xgu_set_fog_mode(pb, gliEnumToNvFogMode(cs->fog_mode));
         pb = xgu_set_fog_color(pb, FLOAT4_TO_PACKED_ABGR32(cs->fog_color));
