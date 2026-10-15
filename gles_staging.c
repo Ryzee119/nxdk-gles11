@@ -142,7 +142,7 @@ static void *stage_attribute(arena_t *arena,
     return dst;
 }
 
-GLboolean gliStageClientArrays(GLsizei vertex_count)
+GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
 {
     gli_context_t *context = gliGetContext();
     vertex_array_data_t *vad = &context->vertex_array_data;
@@ -159,8 +159,8 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding == 0 && vad->vertex_array_ptr != NULL) {
         size_t elem_size = (size_t)(vad->vertex_array_size * gliEnumtoByteSize(vad->vertex_array_type));
         GLsizei stride = compute_stride(vad->vertex_array_stride, vad->vertex_array_size, vad->vertex_array_type);
-        void *staged =
-            stage_attribute(arena, ranges, &range_count, vad->vertex_array_ptr, stride, elem_size, vertex_count);
+        const void *src_ptr = (const uint8_t *)vad->vertex_array_ptr + (size_t)first * stride;
+        void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -173,8 +173,8 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     if (vad->normal_array_enabled && vad->normal_array_buffer_binding == 0 && vad->normal_array_ptr != NULL) {
         size_t elem_size = (size_t)(3 * gliEnumtoByteSize(vad->normal_array_type));
         GLsizei stride = compute_stride(vad->normal_array_stride, 3, vad->normal_array_type);
-        void *staged =
-            stage_attribute(arena, ranges, &range_count, vad->normal_array_ptr, stride, elem_size, vertex_count);
+        const void *src_ptr = (const uint8_t *)vad->normal_array_ptr + (size_t)first * stride;
+        void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -187,8 +187,8 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
     if (vad->color_array_enabled && vad->color_array_buffer_binding == 0 && vad->color_array_ptr != NULL) {
         size_t elem_size = (size_t)(vad->color_array_size * gliEnumtoByteSize(vad->color_array_type));
         GLsizei stride = compute_stride(vad->color_array_stride, vad->color_array_size, vad->color_array_type);
-        void *staged =
-            stage_attribute(arena, ranges, &range_count, vad->color_array_ptr, stride, elem_size, vertex_count);
+        const void *src_ptr = (const uint8_t *)vad->color_array_ptr + (size_t)first * stride;
+        void *staged = stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -204,8 +204,9 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
             size_t elem_size = (size_t)(vad->texcoord_array_size[i] * gliEnumtoByteSize(vad->texcoord_array_type[i]));
             GLsizei stride =
                 compute_stride(vad->texcoord_array_stride[i], vad->texcoord_array_size[i], vad->texcoord_array_type[i]);
+            const void *src_ptr = (const uint8_t *)vad->texcoord_array_ptr[i] + (size_t)first * stride;
             void *staged = stage_attribute(
-                arena, ranges, &range_count, vad->texcoord_array_ptr[i], stride, elem_size, vertex_count);
+                arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
             if (!staged) {
                 goto out_of_memory;
             }
@@ -220,8 +221,9 @@ GLboolean gliStageClientArrays(GLsizei vertex_count)
         vad->point_size_array_ptr != NULL) {
         size_t elem_size = (size_t)(1 * gliEnumtoByteSize(vad->point_size_array_type));
         GLsizei stride = compute_stride(vad->point_size_array_stride, 1, vad->point_size_array_type);
+        const void *src_ptr = (const uint8_t *)vad->point_size_array_ptr + (size_t)first * stride;
         void *staged =
-            stage_attribute(arena, ranges, &range_count, vad->point_size_array_ptr, stride, elem_size, vertex_count);
+            stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
         if (!staged) {
             goto out_of_memory;
         }
@@ -304,5 +306,30 @@ GLboolean gliNeedsStaging(void)
         }
     }
 
+    return GL_FALSE;
+}
+
+GLboolean gliHasBoundVBOArrays(void)
+{
+    gli_context_t *context = gliGetContext();
+    vertex_array_data_t *vad = &context->vertex_array_data;
+
+    if (vad->vertex_array_enabled && vad->vertex_array_buffer_binding != 0) {
+        return GL_TRUE;
+    }
+    if (vad->normal_array_enabled && vad->normal_array_buffer_binding != 0) {
+        return GL_TRUE;
+    }
+    if (vad->color_array_enabled && vad->color_array_buffer_binding != 0) {
+        return GL_TRUE;
+    }
+    if (vad->point_size_array_enabled && vad->point_size_array_buffer_binding != 0) {
+        return GL_TRUE;
+    }
+    for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+        if (vad->texcoord_array_enabled[i] && vad->texcoord_array_buffer_binding[i] != 0) {
+            return GL_TRUE;
+        }
+    }
     return GL_FALSE;
 }

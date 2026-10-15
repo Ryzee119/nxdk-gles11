@@ -235,12 +235,22 @@ GL_API void GL_APIENTRY glDrawArrays(GLenum mode, GLint first, GLsizei count)
         return;
     }
 
-    if (!gliStageClientArrays(first + count)) {
-        return;
+    GLint draw_first = first;
+    if (gliNeedsStaging()) {
+        if (!gliHasBoundVBOArrays()) {
+            if (!gliStageClientArrays(first, count)) {
+                return;
+            }
+            draw_first = 0;
+        } else {
+            if (!gliStageClientArrays(0, first + count)) {
+                return;
+            }
+        }
     }
 
     gliFlushStateChange();
-    xgux_draw_arrays(primitive, first, count);
+    xgux_draw_arrays(primitive, draw_first, count);
 
     // The current color, normal, point size, and texture coordinates each become indeterminate after the execution of
     // DrawArrays, however based on testing on my PC, atleast color seems to be restored. FIXME. Check others
@@ -279,7 +289,7 @@ GL_API void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count, GLenum type, 
     // Scan indices to find vertex range, then stage client arrays
     if (gliNeedsStaging()) {
         GLsizei max_index = gliScanMaxIndex(type, indices_ptr, count);
-        if (!gliStageClientArrays(max_index + 1)) {
+        if (!gliStageClientArrays(0, max_index + 1)) {
             return;
         }
     }
