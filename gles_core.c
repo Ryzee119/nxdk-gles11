@@ -742,6 +742,7 @@ void glContextInit(GLint window_width, GLint window_height)
     /* --- Table 6.7: Transformation state --- */
     context->transformation_state.modelview_matrix_stack_depth = 1;
     context->transformation_state.projection_matrix_stack_depth = 1;
+    context->transformation_state.vp_matrix_dirty = GL_TRUE;
 
     /* Each stack starts with one identity matrix */
     glMatrixMode(GL_PROJECTION);

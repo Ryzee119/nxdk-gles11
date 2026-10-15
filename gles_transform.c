@@ -370,19 +370,22 @@ void gliTransformFlush(void)
             pb = xgu_set_viewport_scale(pb, 1.0f, 1.0f, 1.0f, 1.0f);
             pb_end(pb);
             c->transformation_state.viewport_dirty = GL_FALSE;
+            c->transformation_state.vp_matrix_dirty = GL_TRUE;
+        }
+
+        if (ts->projection_matrix_dirty || ts->vp_matrix_dirty) {
+            mat4 *projection = &ts->projection_matrix_stack[ts->projection_matrix_stack_depth - 1];
+            glm_mat4_mul(ts->viewport_matrix, *projection, ts->vp_matrix);
+            ts->vp_matrix_dirty = GL_FALSE;
         }
 
         mat4 *modelview = &ts->modelview_matrix_stack[ts->modelview_matrix_stack_depth - 1];
-        mat4 *projection = &ts->projection_matrix_stack[ts->projection_matrix_stack_depth - 1];
-        mat4 *viewport = &ts->viewport_matrix;
-
-        // Need to do ViewPort * Projection * ModelView for push to composite matrix
         mat4 mvp;
-        glm_mat4_mulN((const mat4 *[]){viewport, projection, modelview}, 3, mvp);
+        glm_mat4_mul(ts->vp_matrix, *modelview, mvp);
 
         uint32_t *pb = pb_begin();
         // pb = pb_push_transposed_matrix(pb, NV097_SET_PROJECTION_MATRIX, (const float *)*projection);
-        pb = pb_push_transposed_matrix(pb, NV097_SET_COMPOSITE_MATRIX, (const float *)*mvp);
+        pb = pb_push_transposed_matrix(pb, NV097_SET_COMPOSITE_MATRIX, (const float *)mvp);
         pb_end(pb);
 
         c->transformation_state.modelview_matrix_dirty = GL_FALSE;
