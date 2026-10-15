@@ -315,90 +315,103 @@ GL_API void GL_APIENTRY glGetClipPlanex(GLenum plane, GLfixed *equation)
     }
 }
 
+static inline GLboolean is_mat4_identity(const mat4 m)
+{
+    static const mat4 identity = {
+        {1.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f}
+    };
+    return __builtin_memcmp(m, identity, sizeof(mat4)) == 0;
+}
+
 void gliTransformFlush(void)
 {
     gli_context_t *c = gliGetContext();
     transformation_state_t *ts = &c->transformation_state;
 
-    // Model view and inverse model view
-    if (ts->modelview_matrix_dirty) {
-        mat4 *modelview = &ts->modelview_matrix_stack[ts->modelview_matrix_stack_depth - 1];
-        uint32_t *pb = pb_begin();
-        pb = pb_push_transposed_matrix(pb, NV097_SET_MODEL_VIEW_MATRIX, (const float *)(*modelview));
+    const GLboolean any_transform_dirty =
+        ts->modelview_matrix_dirty || ts->projection_matrix_dirty || ts->viewport_dirty || ts->depth_range_dirty;
 
-        if (c->lighting_state.lighting_enabled) {
-            mat4 modelview_inv;
-            glm_mat4_inv(*modelview, modelview_inv);
-            pb = pb_push_4x4_matrix(pb, NV097_SET_INVERSE_MODEL_VIEW_MATRIX, (const float *)modelview_inv);
+    if (any_transform_dirty) {
+        uint32_t *pb = pb_begin();
+
+        // Model view and inverse model view
+        if (ts->modelview_matrix_dirty) {
+            mat4 *modelview = &ts->modelview_matrix_stack[ts->modelview_matrix_stack_depth - 1];
+            pb = pb_push_transposed_matrix(pb, NV097_SET_MODEL_VIEW_MATRIX, (const float *)(*modelview));
+
+            if (c->lighting_state.lighting_enabled) {
+                mat4 modelview_inv;
+                glm_mat4_inv(*modelview, modelview_inv);
+                pb = pb_push_4x4_matrix(pb, NV097_SET_INVERSE_MODEL_VIEW_MATRIX, (const float *)modelview_inv);
+            }
+        }
+
+        // Projection, Viewport, Composite
+        if (ts->modelview_matrix_dirty || ts->projection_matrix_dirty || ts->viewport_dirty) {
+            if (ts->viewport_dirty) {
+                GLfloat zsize = (ts->depth_range[1] - ts->depth_range[0]) * (GLfloat)(GLI_DEPTH_BUFFER_MAX);
+                GLint x = ts->viewport[0];
+                GLint y = ts->viewport[1];
+                GLsizei w = ts->viewport[2];
+                GLsizei h = ts->viewport[3];
+
+                GLfloat translate_x = x + (w / 2.0f);
+                GLfloat translate_y = c->current_surface_height - y - (h / 2.0f);
+                GLfloat translate_z = zsize / 2.0f;
+                GLfloat scale_x = w / 2.0f;
+                GLfloat scale_y = (h / -2.0f);
+                GLfloat scale_z = zsize / 2.0f;
+                GLfloat scale_w = 1.0f;
+
+                mat4 viewport = {
+                    {scale_x,     0.0f,        0.0f,        0.0f   },
+                    {0.0f,        scale_y,     0.0f,        0.0f   },
+                    {0.0f,        0.0f,        scale_z,     0.0f   },
+                    {translate_x, translate_y, translate_z, scale_w}
+                };
+
+                glm_mat4_copy(viewport, ts->viewport_matrix);
+
+                pb = xgu_set_viewport_offset(pb, 0.0f, 0.0f, 0.0f, 0.0f);
+                pb = xgu_set_viewport_scale(pb, 1.0f, 1.0f, 1.0f, 1.0f);
+                ts->viewport_dirty = GL_FALSE;
+                ts->vp_matrix_dirty = GL_TRUE;
+            }
+
+            if (ts->projection_matrix_dirty || ts->vp_matrix_dirty) {
+                mat4 *projection = &ts->projection_matrix_stack[ts->projection_matrix_stack_depth - 1];
+                glm_mat4_mul(ts->viewport_matrix, *projection, ts->vp_matrix);
+                ts->vp_matrix_dirty = GL_FALSE;
+            }
+
+            mat4 *modelview = &ts->modelview_matrix_stack[ts->modelview_matrix_stack_depth - 1];
+            mat4 mvp;
+            glm_mat4_mul(ts->vp_matrix, *modelview, mvp);
+
+            pb = pb_push_transposed_matrix(pb, NV097_SET_COMPOSITE_MATRIX, (const float *)mvp);
+
+            ts->modelview_matrix_dirty = GL_FALSE;
+            ts->projection_matrix_dirty = GL_FALSE;
+        }
+
+        if (ts->depth_range_dirty) {
+            uint32_t control0 = NV097_SET_CONTROL0_TEXTUREPERSPECTIVE | NV097_SET_CONTROL0_STENCIL_WRITE_ENABLE;
+            pb = push_command_parameter(pb, NV097_SET_CONTROL0, control0);
+            pb = push_command_parameter(pb, NV097_SET_ZMIN_MAX_CONTROL, 1);
+            pb = push_command_parameter(pb, NV097_SET_COMPRESS_ZBUFFER_EN, 1);
+            pb = xgu_set_clip_min(pb, ts->depth_range[0] * (GLfloat)GLI_DEPTH_BUFFER_MAX);
+            pb = xgu_set_clip_max(pb, ts->depth_range[1] * (GLfloat)GLI_DEPTH_BUFFER_MAX);
+            ts->depth_range_dirty = GL_FALSE;
         }
 
         pb_end(pb);
-    }
-
-    // Projection, Viewport, Composite
-    if (ts->modelview_matrix_dirty || ts->projection_matrix_dirty || ts->viewport_dirty) {
-        if (ts->viewport_dirty) {
-            GLfloat zsize = (c->transformation_state.depth_range[1] - c->transformation_state.depth_range[0]) *
-                            (GLfloat)(GLI_DEPTH_BUFFER_MAX);
-            GLint x = c->transformation_state.viewport[0];
-            GLint y = c->transformation_state.viewport[1];
-            GLsizei w = c->transformation_state.viewport[2];
-            GLsizei h = c->transformation_state.viewport[3];
-
-            GLfloat translate_x = x + (w / 2.0f);
-            GLfloat translate_y = c->current_surface_height - y - (h / 2.0f);
-            GLfloat translate_z = zsize / 2.0f;
-            GLfloat scale_x = w / 2.0f;
-            // Always flip Y-axis (both screen and FBO) to match OpenGL coordinate space natively
-            GLfloat scale_y = (h / -2.0f);
-            GLfloat scale_z = zsize / 2.0f;
-            GLfloat scale_w = 1.0f;
-
-            mat4 viewport = {
-                {scale_x,     0.0f,        0.0f,        0.0f   },
-                {0.0f,        scale_y,     0.0f,        0.0f   },
-                {0.0f,        0.0f,        scale_z,     0.0f   },
-                {translate_x, translate_y, translate_z, scale_w}
-            };
-            // We create this because NV097_SET_VIEWPORT_SCALE doesn't work in ffp.
-            // NV097_SET_VIEWPORT_OFFSET seems to work ok though but we bake in the offset here anyway
-
-            glm_mat4_copy(viewport, c->transformation_state.viewport_matrix);
-
-            uint32_t *pb = pb_begin();
-            pb = xgu_set_viewport_offset(pb, 0.0f, 0.0f, 0.0f, 0.0f);
-            pb = xgu_set_viewport_scale(pb, 1.0f, 1.0f, 1.0f, 1.0f);
-            pb_end(pb);
-            c->transformation_state.viewport_dirty = GL_FALSE;
-            c->transformation_state.vp_matrix_dirty = GL_TRUE;
-        }
-
-        if (ts->projection_matrix_dirty || ts->vp_matrix_dirty) {
-            mat4 *projection = &ts->projection_matrix_stack[ts->projection_matrix_stack_depth - 1];
-            glm_mat4_mul(ts->viewport_matrix, *projection, ts->vp_matrix);
-            ts->vp_matrix_dirty = GL_FALSE;
-        }
-
-        mat4 *modelview = &ts->modelview_matrix_stack[ts->modelview_matrix_stack_depth - 1];
-        mat4 mvp;
-        glm_mat4_mul(ts->vp_matrix, *modelview, mvp);
-
-        uint32_t *pb = pb_begin();
-        // pb = pb_push_transposed_matrix(pb, NV097_SET_PROJECTION_MATRIX, (const float *)*projection);
-        pb = pb_push_transposed_matrix(pb, NV097_SET_COMPOSITE_MATRIX, (const float *)mvp);
-        pb_end(pb);
-
-        c->transformation_state.modelview_matrix_dirty = GL_FALSE;
-        c->transformation_state.projection_matrix_dirty = GL_FALSE;
-    }
-
-    if (c->transformation_state.depth_range_dirty) {
-        xgux_set_depth_range(ts->depth_range[0] * (GLfloat)GLI_DEPTH_BUFFER_MAX,
-                             ts->depth_range[1] * (GLfloat)GLI_DEPTH_BUFFER_MAX);
-        c->transformation_state.depth_range_dirty = GL_FALSE;
     }
 
     // Texture matrices
+    uint32_t *pb = NULL;
     for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         texture_unit_t *texture_unit = &c->texture_environment.texture_units[i];
         texture_object_t *texture_object = texture_unit->bound_texture_object;
@@ -408,26 +421,32 @@ void gliTransformFlush(void)
         }
 
         xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
-
         if (!xgu_texture) {
             continue;
         }
 
-        if (c->transformation_state.texture_matrix_dirty[i]) {
-            c->transformation_state.texture_matrix_dirty[i] = GL_FALSE;
-            mat4 texture_matrix;
-            glGetFloatv(GL_TEXTURE_MATRIX, (GLfloat *)texture_matrix);
+        if (ts->texture_matrix_dirty[i]) {
+            ts->texture_matrix_dirty[i] = GL_FALSE;
+            if (!pb) {
+                pb = pb_begin();
+            }
 
-            // Apply uv scale corrections
-            texture_matrix[0][0] *= xgu_texture->u_scale;
-            texture_matrix[1][1] *= xgu_texture->v_scale;
+            const mat4 *src_tex_mat = &ts->texture_matrix_stack[i][ts->texture_matrix_stack_depth[i] - 1];
+            if (xgu_texture->u_scale == 1.0f && xgu_texture->v_scale == 1.0f && is_mat4_identity(*src_tex_mat)) {
+                pb = xgu_set_texture_matrix_enable(pb, i, false);
+            } else {
+                mat4 texture_matrix;
+                glm_mat4_copy(*src_tex_mat, texture_matrix);
+                texture_matrix[0][0] *= xgu_texture->u_scale;
+                texture_matrix[1][1] *= xgu_texture->v_scale;
 
-            // Upload to hardware
-            uint32_t *pb = pb_begin();
-            pb = xgu_set_texture_matrix_enable(pb, i, true);
-            pb = pb_push_transposed_matrix(
-                pb, NV097_SET_TEXTURE_MATRIX + i * (4 * 4) * 4, (const float *)texture_matrix);
-            pb_end(pb);
+                pb = xgu_set_texture_matrix_enable(pb, i, true);
+                pb = pb_push_transposed_matrix(
+                    pb, NV097_SET_TEXTURE_MATRIX + i * (4 * 4) * 4, (const float *)texture_matrix);
+            }
         }
+    }
+    if (pb) {
+        pb_end(pb);
     }
 }
