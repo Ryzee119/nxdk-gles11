@@ -69,12 +69,6 @@ void glFlipNV2A()
         calculate_and_display_fps();
     }
 
-    if (gl_swap_interval > 0) {
-        for (int i = 0; i < gl_swap_interval; i++) {
-            pb_wait_for_vbl();
-        }
-    }
-
     while (pb_finished()) {
         NtYieldExecution();
     }
@@ -89,6 +83,19 @@ void glFlipNV2A()
     pb_end(pb);
 
     pb_reset();
+
+    /* Ensure the GPU has finished rendering and executed PB_FINISHED (marking
+     * the completed backbuffer ready in pb_BackBufferbReady) before waiting
+     * for VBlank to flip it to PCRTC_START. */
+    while (pb_busy()) {
+        NtYieldExecution();
+    }
+
+    if (gl_swap_interval > 0) {
+        for (int i = 0; i < gl_swap_interval; i++) {
+            pb_wait_for_vbl();
+        }
+    }
 
     if (gl_show_fps) {
         frame_start = KeQueryPerformanceCounter();
