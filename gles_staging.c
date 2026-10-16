@@ -7,8 +7,8 @@
 // before drawing. VBO-backed arrays are already in contiguous memory and are skipped.
 
 // Maximum number of enabled attribute arrays we could have at once:
-// vertex + normal + color + texcoord * N + point_size
-#define MAX_STAGED_RANGES (1 + 1 + 1 + GLI_MAX_TEXTURE_UNITS + 1)
+// vertex + normal + color + texcoord * N + point_size + fog_coord
+#define MAX_STAGED_RANGES (1 + 1 + 1 + GLI_MAX_TEXTURE_UNITS + 1 + 1)
 
 // Tracks a source range that has already been copied into the arena,
 // so that interleaved arrays sharing the same memory block are only copied once.
@@ -254,6 +254,23 @@ GLboolean gliStageClientArrays(GLint first, GLsizei vertex_count)
         vad->point_size_array_dirty = GL_FALSE;
     }
 
+    // --- Fog coordinate array ---
+    if (vad->fog_coord_array_enabled && vad->fog_coord_array_buffer_binding == 0 &&
+        vad->fog_coord_array_ptr != NULL) {
+        size_t elem_size = (size_t)(1 * gliEnumtoByteSize(vad->fog_coord_array_type));
+        GLsizei stride = compute_stride(vad->fog_coord_array_stride, 1, vad->fog_coord_array_type);
+        const void *src_ptr = (const uint8_t *)vad->fog_coord_array_ptr + (size_t)first * stride;
+        void *staged =
+            stage_attribute(arena, ranges, &range_count, src_ptr, stride, elem_size, vertex_count);
+        if (!staged) {
+            pb_end(pb);
+            goto out_of_memory;
+        }
+        XguVertexArrayType format = gliEnumToNvType(vad->fog_coord_array_type);
+        pb = push_staged_attrib(pb, context, XGU_FOG_ARRAY, format, 1, stride, staged);
+        vad->fog_coord_array_dirty = GL_FALSE;
+    }
+
     if (range_count > 0) {
         pb = pb_push1(pb, NV097_BREAK_VERTEX_BUFFER_CACHE, 0);
     }
@@ -319,6 +336,10 @@ GLboolean gliNeedsStaging(void)
         vad->point_size_array_ptr != NULL) {
         return GL_TRUE;
     }
+    if (vad->fog_coord_array_enabled && vad->fog_coord_array_buffer_binding == 0 &&
+        vad->fog_coord_array_ptr != NULL) {
+        return GL_TRUE;
+    }
     for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
         if (vad->texcoord_array_enabled[i] && vad->texcoord_array_buffer_binding[i] == 0 &&
             vad->texcoord_array_ptr[i] != NULL) {
@@ -344,6 +365,9 @@ GLboolean gliHasBoundVBOArrays(void)
         return GL_TRUE;
     }
     if (vad->point_size_array_enabled && vad->point_size_array_buffer_binding != 0) {
+        return GL_TRUE;
+    }
+    if (vad->fog_coord_array_enabled && vad->fog_coord_array_buffer_binding != 0) {
         return GL_TRUE;
     }
     for (int i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {

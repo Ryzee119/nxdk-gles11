@@ -728,6 +728,10 @@ void glContextInit(GLint window_width, GLint window_height)
     glDisableClientState(GL_POINT_SIZE_ARRAY_OES);
     glPointSizePointerOES(GL_FLOAT, 0, NULL);
 
+    /* EXT_fog_coord */
+    glDisableClientState(GL_FOG_COORDINATE_ARRAY_EXT);
+    glFogCoordPointerEXT(GL_FLOAT, 0, NULL);
+
     /* Buffer bindings (global) + any per-attribute names you track */
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);

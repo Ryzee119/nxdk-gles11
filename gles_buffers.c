@@ -174,6 +174,12 @@ GL_API void GL_APIENTRY glDeleteBuffers(GLsizei n, const GLuint *buffers)
                 context->vertex_array_data.point_size_array_dirty = GL_TRUE;
             }
 
+            if (context->vertex_array_data.fog_coord_array_buffer_binding == name) {
+                context->vertex_array_data.fog_coord_array_buffer_binding = 0;
+                context->vertex_array_data.fog_coord_array_ptr = NULL;
+                context->vertex_array_data.fog_coord_array_dirty = GL_TRUE;
+            }
+
             for (int u = 0; u < GLI_MAX_TEXTURE_UNITS; ++u) {
                 if (context->vertex_array_data.texcoord_array_buffer_binding[u] == name) {
                     context->vertex_array_data.texcoord_array_buffer_binding[u] = 0;

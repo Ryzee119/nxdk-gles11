@@ -164,6 +164,13 @@ typedef struct
     GLsizei point_size_array_stride;
     const GLvoid *point_size_array_ptr;
 
+    // Fog coordinate array (Extension)
+    GLboolean fog_coord_array_dirty;
+    GLboolean fog_coord_array_enabled;
+    GLenum fog_coord_array_type;
+    GLsizei fog_coord_array_stride;
+    const GLvoid *fog_coord_array_ptr;
+
     // Bindings
     GLuint array_buffer_binding;
     GLuint element_array_buffer_binding;
@@ -172,6 +179,7 @@ typedef struct
     GLuint color_array_buffer_binding;
     GLuint texcoord_array_buffer_binding[GLI_MAX_TEXTURE_UNITS];
     GLuint point_size_array_buffer_binding;
+    GLuint fog_coord_array_buffer_binding;
 } vertex_array_data_t;
 
 // Table 6.6 - Buffer Object State
