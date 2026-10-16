@@ -28,6 +28,13 @@ static void glEnableDisableClientState(GLenum array, GLboolean enable)
             vad->point_size_array_enabled = enable;
             vad->point_size_array_dirty = GL_TRUE;
             break;
+        case GL_FOG_COORDINATE_ARRAY_EXT:
+            if (vad->fog_coord_array_enabled != enable) {
+                vad->fog_coord_array_enabled = enable;
+                vad->fog_coord_array_dirty = GL_TRUE;
+                context->coloring_state.fog_dirty = GL_TRUE;
+            }
+            break;
         default:
             gliSetError(GL_INVALID_ENUM);
             break;
@@ -213,6 +220,38 @@ GL_API void GL_APIENTRY glPointSizePointerOES(GLenum type, GLsizei stride, const
     vad->point_size_array_ptr = pointer;
 
     vad->point_size_array_dirty = GL_TRUE;
+}
+
+GL_API void GL_APIENTRY glFogCoordPointerEXT(GLenum type, GLsizei stride, const void *pointer)
+{
+    gli_context_t *context = gliGetContext();
+    vertex_array_data_t *vad = &context->vertex_array_data;
+
+    if (type != GL_FIXED && type != GL_FLOAT) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+    if (stride < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    if (vad->array_buffer_binding != 0) {
+        buffer_object_t *buffer = gliFindBufferObject(vad->array_buffer_binding, NULL);
+        if (buffer == NULL) {
+            gliSetError(GL_INVALID_OPERATION);
+            return;
+        }
+        vad->fog_coord_array_buffer_binding = vad->array_buffer_binding;
+    } else {
+        vad->fog_coord_array_buffer_binding = 0;
+    }
+
+    vad->fog_coord_array_type = type;
+    vad->fog_coord_array_stride = stride;
+    vad->fog_coord_array_ptr = pointer;
+
+    vad->fog_coord_array_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glDrawArrays(GLenum mode, GLint first, GLsizei count)
@@ -432,7 +471,8 @@ void gliArrayFlush(void)
     vertex_array_data_t *vad = &context->vertex_array_data;
     current_values_t *cv = &context->current_values;
 
-    GLboolean any_dirty = vad->vertex_array_dirty || vad->color_array_dirty || vad->normal_array_dirty || vad->point_size_array_dirty;
+    GLboolean any_dirty = vad->vertex_array_dirty || vad->color_array_dirty || vad->normal_array_dirty ||
+                          vad->point_size_array_dirty || vad->fog_coord_array_dirty;
     if (!any_dirty) {
         for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
             if (vad->texcoord_array_dirty[i]) {
@@ -543,6 +583,24 @@ void gliArrayFlush(void)
             pb = push_attrib_pointer(pb, XGU_POINT_SIZE_ARRAY, XGU_FLOAT, 0, 0, NULL);
         }
         vad->point_size_array_dirty = GL_FALSE;
+    }
+
+    // Fog Coordinate
+    if (vad->fog_coord_array_dirty) {
+        if (vad->fog_coord_array_enabled) {
+            XguVertexArrayType format = gliEnumToNvType(vad->fog_coord_array_type);
+            unsigned int stride = vad->fog_coord_array_stride;
+            if (stride == 0) {
+                stride = 1 * gliEnumtoByteSize(vad->fog_coord_array_type);
+            }
+
+            const void *array_ptr =
+                gliGetBufferPointer(vad->fog_coord_array_buffer_binding, vad->fog_coord_array_ptr);
+            pb = push_attrib_pointer(pb, XGU_FOG_ARRAY, format, 1, stride, array_ptr);
+        } else {
+            pb = push_attrib_pointer(pb, XGU_FOG_ARRAY, XGU_FLOAT, 0, 0, NULL);
+        }
+        vad->fog_coord_array_dirty = GL_FALSE;
     }
 
     pb_end(pb);

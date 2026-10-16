@@ -552,6 +552,12 @@ GL_API void GL_APIENTRY glViewport (GLint x, GLint y, GLsizei width, GLsizei hei
 GL_API void GL_APIENTRY glPointSizePointerOES (GLenum type, GLsizei stride, const void *pointer);
 #endif /* GL_OES_point_size_array */
 
+#ifndef GL_EXT_fog_coord
+#define GL_EXT_fog_coord 1
+#define GL_FOG_COORDINATE_ARRAY_EXT       0x8457
+GL_API void GL_APIENTRY glFogCoordPointerEXT (GLenum type, GLsizei stride, const void *pointer);
+#endif /* GL_EXT_fog_coord */
+
 #ifndef GL_OES_point_sprite
 #define GL_OES_point_sprite 1
 #define GL_POINT_SPRITE_OES               0x8861

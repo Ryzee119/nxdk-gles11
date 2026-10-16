@@ -127,9 +127,11 @@ void gliFogFlush(void)
                 return;
         }
 
-        const XguFogGenMode gen_mode = (context->hints_state.fog_hint == GL_NICEST)
-                                           ? XGU_FOG_GEN_MODE_RADIAL
-                                           : XGU_FOG_GEN_MODE_PLANAR;
+        const XguFogGenMode gen_mode = context->vertex_array_data.fog_coord_array_enabled
+                                           ? XGU_FOG_GEN_MODE_FOG_X
+                                           : ((context->hints_state.fog_hint == GL_NICEST)
+                                                  ? XGU_FOG_GEN_MODE_RADIAL
+                                                  : XGU_FOG_GEN_MODE_PLANAR);
 
         // Atomically emit all fog state and final combiner, matching lazy.cpp:565-606
         pb = xgu_set_fog_gen_mode(pb, gen_mode);
