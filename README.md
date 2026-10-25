@@ -132,16 +132,13 @@ int main (int argc, char **argv)
 }
 ```
 
-
-
 ## Todo
 * [ ] Lots of FIXMEs
 * [ ] glTexSubImage2D, glCopyTexImage2D, glCopyTexSubImage2D (and compressed?)
-* [ ] Replace swizzle code with something more permissive (MIT etc)
 
 ## Attribution
 * Some lighting code taken from https://github.com/JayFoxRox/xgu-gl
 * nv2a help from https://github.com/abaire/nxdk_pgraph_tests
 * xgu wrapper for pbkit https://github.com/dracc/xgu.git (MIT)
 * cglm matrix code https://github.com/recp/cglm (MIT)
-* Swizzle Code https://github.com/xemu-project/xemu/blob/9917817a8ac0c3d9826d9d005e76379ef1eb4b38/hw/xbox/nv2a/pgraph/swizzle.c (GPLv2)
+* Swizzle Code: MIT-licensed implementation in `lib/swizzle`, derived from the Nouveau/Mesa nv30 texture code (Z-order interleaving and mask-increment technique)

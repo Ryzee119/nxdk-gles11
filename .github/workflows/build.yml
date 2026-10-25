@@ -21,3 +21,13 @@ jobs:
                 mkdir -p samples/build && cd samples/build && \
                 cmake .. -DCMAKE_TOOLCHAIN_FILE=/usr/src/nxdk/share/toolchain-nxdk.cmake -DCMAKE_BUILD_TYPE=Release && \
                 cmake --build ."
+
+  swizzle-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+
+    - name: Build and run swizzle tests
+      run: make -C lib/swizzle/tests test
+
