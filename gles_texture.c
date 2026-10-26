@@ -90,10 +90,11 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         return;
     }
 
-    const GLboolean prev_has_tex = (texture_unit->bound_texture_object != &texture_unit->unbound_texture_object &&
-                                   texture_unit->bound_texture_object != NULL &&
-                                   texture_unit->bound_texture_object->texture_2d != NULL);
-    const xgu_texture_t *prev_xgu = prev_has_tex ? (const xgu_texture_t *)texture_unit->bound_texture_object->texture_2d : NULL;
+    const GLboolean prev_has_tex =
+        (texture_unit->bound_texture_object != &texture_unit->unbound_texture_object &&
+         texture_unit->bound_texture_object != NULL && texture_unit->bound_texture_object->texture_2d != NULL);
+    const xgu_texture_t *prev_xgu =
+        prev_has_tex ? (const xgu_texture_t *)texture_unit->bound_texture_object->texture_2d : NULL;
     const GLfloat prev_u_scale = prev_xgu ? prev_xgu->u_scale : 1.0f;
     const GLfloat prev_v_scale = prev_xgu ? prev_xgu->v_scale : 1.0f;
 
@@ -791,6 +792,31 @@ static inline void convert_to_bgra(const uint8_t *restrict src, uint8_t *restric
     }
 }
 
+static size_t texture_swizzled_pixel_offset(GLuint width, GLuint height, GLuint x, GLuint y)
+{
+    GLuint offset = 0;
+    GLuint source_bit = 1;
+    GLuint destination_bit = 1;
+
+    while (source_bit < width || source_bit < height) {
+        if (source_bit < width) {
+            if (x & source_bit) {
+                offset |= destination_bit;
+            }
+            destination_bit <<= 1;
+        }
+        if (source_bit < height) {
+            if (y & source_bit) {
+                offset |= destination_bit;
+            }
+            destination_bit <<= 1;
+        }
+        source_bit <<= 1;
+    }
+
+    return offset;
+}
+
 GL_API void GL_APIENTRY glTexImage2D(GLenum target,
                                      GLint level,
                                      GLint internalformat,
@@ -1117,16 +1143,153 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
                                         GLenum type,
                                         const void *pixels)
 {
-    assert(0 && "glTexSubImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)xoff;
-    (void)yoff;
-    (void)w;
-    (void)h;
-    (void)format;
-    (void)type;
-    (void)pixels;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (format != GL_ALPHA && format != GL_RGB && format != GL_RGBA && format != GL_LUMINANCE &&
+        format != GL_LUMINANCE_ALPHA) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_SHORT_5_6_5 && type != GL_UNSIGNED_SHORT_4_4_4_4 &&
+        type != GL_UNSIGNED_SHORT_5_5_5_1) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if ((type == GL_UNSIGNED_SHORT_5_6_5 && format != GL_RGB) ||
+        ((type == GL_UNSIGNED_SHORT_4_4_4_4 || type == GL_UNSIGNED_SHORT_5_5_5_1) && format != GL_RGBA)) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (level < 0 || xoff < 0 || yoff < 0 || w < 0 || h < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_unit_t *texture_unit = &context->texture_environment.texture_units[texture_index];
+    texture_object_t *texture_object = texture_unit->bound_texture_object;
+    if (texture_object == NULL || texture_object->texture_name == 0 || texture_object->texture_2d == NULL) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    // No format conversion is done, the data must match the texture's format
+    if (format != (GLenum)texture_object->internalformat) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
+    if (level >= xgu_texture->mipmap_levels || (level > 0 && !xgu_texture->swizzled)) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    GLuint storage_width = xgu_texture->data_width;
+    GLuint storage_height = xgu_texture->data_height;
+    size_t level_offset = 0;
+    for (GLint i = 0; i < level; i++) {
+        level_offset += (size_t)storage_width * storage_height * xgu_texture->bytes_per_pixel;
+        if (storage_width > 1) {
+            storage_width /= 2;
+        }
+        if (storage_height > 1) {
+            storage_height /= 2;
+        }
+    }
+
+    GLuint level_width = storage_width;
+    GLuint level_height = storage_height;
+    if (level == 0) {
+        // glTexImage2D swizzles level 0 at its real size, not the 8 texel minimum storage size
+        level_width = storage_width = xgu_texture->tex_width;
+        level_height = storage_height = xgu_texture->tex_height;
+    }
+
+    if ((GLuint)w > level_width || (GLuint)h > level_height || (GLuint)xoff > level_width - (GLuint)w ||
+        (GLuint)yoff > level_height - (GLuint)h) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint storage_bytes_per_pixel = 0;
+    XguTexFormatColor requested_format =
+        gliEnumToNvTexFormat(format, type, &storage_bytes_per_pixel, xgu_texture->swizzled);
+    if (requested_format == (XguTexFormatColor)-1 || requested_format != xgu_texture->format ||
+        storage_bytes_per_pixel != (GLuint)xgu_texture->bytes_per_pixel) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (w == 0 || h == 0) {
+        return;
+    }
+    if (pixels == NULL) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint source_bytes_per_pixel;
+    if (type == GL_UNSIGNED_BYTE) {
+        if (format == GL_RGB) {
+            source_bytes_per_pixel = 3;
+        } else if (format == GL_RGBA) {
+            source_bytes_per_pixel = 4;
+        } else if (format == GL_LUMINANCE_ALPHA) {
+            source_bytes_per_pixel = 2;
+        } else {
+            source_bytes_per_pixel = 1;
+        }
+    } else {
+        source_bytes_per_pixel = 2;
+    }
+
+    GLint alignment = context->pixel_store.unpack_alignment;
+    size_t source_row_bytes = (size_t)w * source_bytes_per_pixel;
+    size_t source_pitch = (source_row_bytes + (size_t)alignment - 1) & ~((size_t)alignment - 1);
+    const GLubyte *source = (const GLubyte *)pixels;
+    GLubyte *destination = xgu_texture->data + level_offset;
+
+    for (GLint row = 0; row < h; row++) {
+        const GLubyte *source_row = source + (size_t)row * source_pitch;
+        for (GLint column = 0; column < w; column++) {
+            GLubyte *destination_pixel = NULL;
+            if (xgu_texture->swizzled) {
+                size_t swizzle_index = texture_swizzled_pixel_offset(
+                    storage_width, storage_height, (GLuint)(xoff + column), (GLuint)(yoff + row));
+                destination_pixel = destination + swizzle_index * xgu_texture->bytes_per_pixel;
+            } else {
+                destination_pixel = destination + (size_t)(yoff + row) * xgu_texture->pitch +
+                                    (size_t)(xoff + column) * xgu_texture->bytes_per_pixel;
+            }
+
+            const GLubyte *source_pixel = source_row + (size_t)column * source_bytes_per_pixel;
+            if (type == GL_UNSIGNED_BYTE && (format == GL_RGB || format == GL_RGBA)) {
+                destination_pixel[0] = source_pixel[2];
+                destination_pixel[1] = source_pixel[1];
+                destination_pixel[2] = source_pixel[0];
+                destination_pixel[3] = (format == GL_RGBA) ? source_pixel[3] : 0xFF;
+            } else {
+                gli_memcpy(destination_pixel, source_pixel, storage_bytes_per_pixel);
+            }
+        }
+    }
+
+    texture_object->texture_object_dirty = GL_TRUE;
+
+    if (level == 0 && xgu_texture->swizzled && texture_object->generate_mipmap) {
+        // The texture may have been created before GL_GENERATE_MIPMAP was enabled, so the mip chain
+        // storage may not exist yet. glGenerateMipmapOES (re)allocates it before generating.
+        glGenerateMipmapOES(GL_TEXTURE_2D);
+    }
 }
 
 GL_API void GL_APIENTRY glCompressedTexImage2D(GLenum target,
