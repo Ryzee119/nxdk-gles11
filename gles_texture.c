@@ -1334,32 +1334,151 @@ GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
     (void)data;
 }
 
+// Reads a framebuffer region as tightly packed RGBA (the ES-guaranteed readback format), then repacks it
+// in place to the destination base format. Per the CopyTexImage conversion rules L takes R and A takes A.
+// The caller must have validated the arguments so that glReadPixels cannot fail, and w, h > 0.
+static GLubyte *copy_tex_read_framebuffer(GLint x, GLint y, GLsizei w, GLsizei h, GLenum format)
+{
+    gli_context_t *context = gliGetContext();
+    const size_t count = (size_t)w * (size_t)h;
+    GLubyte *buffer = GLI_MALLOC(count * 4);
+    if (!buffer) {
+        gliSetError(GL_OUT_OF_MEMORY);
+        return NULL;
+    }
+    const GLint old_pack = context->pixel_store.pack_alignment;
+    context->pixel_store.pack_alignment = 1;
+    glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+    context->pixel_store.pack_alignment = old_pack;
+
+    static const GLubyte alpha[] = {3}, luminance[] = {0}, luminance_alpha[] = {0, 3}, rgb[] = {0, 1, 2};
+    const GLubyte *components;
+    GLuint n;
+    switch (format) {
+        case GL_ALPHA:
+            components = alpha, n = 1;
+            break;
+        case GL_LUMINANCE:
+            components = luminance, n = 1;
+            break;
+        case GL_LUMINANCE_ALPHA:
+            components = luminance_alpha, n = 2;
+            break;
+        case GL_RGB:
+            components = rgb, n = 3;
+            break;
+        default:
+            return buffer; // GL_RGBA
+    }
+
+    // In place is safe: components are increasing and n < 4, so a write never passes an unread byte
+    GLubyte *dst = buffer;
+    for (size_t i = 0; i < count; i++) {
+        const GLubyte *src = buffer + i * 4;
+        for (GLuint c = 0; c < n; c++) {
+            *dst++ = src[components[c]];
+        }
+    }
+    return buffer;
+}
+
+// Validation shared by glCopyTexImage2D/glCopyTexSubImage2D that must happen before reading the framebuffer
+static GLboolean copy_tex_check_source(GLsizei w, GLsizei h)
+{
+    // No texture level can be larger than GL_MAX_TEXTURE_SIZE, this also keeps w * h * 4 from overflowing
+    if (w > GLI_MAX_TEXTURE_SIZE || h > GLI_MAX_TEXTURE_SIZE) {
+        gliSetError(GL_INVALID_VALUE);
+        return GL_FALSE;
+    }
+    // Only the default framebuffer can be read back (see glReadPixels)
+    if (gliGetContext()->fbo_binding != 0) {
+        gliSetError(GL_INVALID_OPERATION);
+        return GL_FALSE;
+    }
+    return GL_TRUE;
+}
+
 GL_API void GL_APIENTRY glCopyTexImage2D(
     GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)
 {
-    assert(0 && "glCopyTexImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)internalformat;
-    (void)x;
-    (void)y;
-    (void)width;
-    (void)height;
-    (void)border;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+    if (internalformat != GL_ALPHA && internalformat != GL_LUMINANCE && internalformat != GL_LUMINANCE_ALPHA &&
+        internalformat != GL_RGB && internalformat != GL_RGBA) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+    if (level < 0 || border != 0 || width < 0 || height < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+    if (!copy_tex_check_source(width, height)) {
+        return;
+    }
+
+    // The default framebuffer is A8R8G8B8, so every base format can be produced from it.
+    // Any remaining errors are raised by glTexImage2D, the readback itself has no side effects.
+    GLubyte *buffer = NULL;
+    if (width > 0 && height > 0) {
+        buffer = copy_tex_read_framebuffer(x, y, width, height, internalformat);
+        if (!buffer) {
+            return;
+        }
+    }
+    const GLint old_unpack = context->pixel_store.unpack_alignment;
+    context->pixel_store.unpack_alignment = 1;
+    glTexImage2D(target, level, internalformat, width, height, 0, internalformat, GL_UNSIGNED_BYTE, buffer);
+    context->pixel_store.unpack_alignment = old_unpack;
+    if (buffer) {
+        GLI_FREE(buffer);
+    }
 }
 
 GL_API void GL_APIENTRY
 glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei w, GLsizei h)
 {
-    assert(0 && "glCopyTexSubImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)xoff;
-    (void)yoff;
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+    if (w < 0 || h < 0 || xoff < 0 || yoff < 0 || level < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+    if (!copy_tex_check_source(w, h)) {
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_object_t *texture_object = context->texture_environment.texture_units[texture_index].bound_texture_object;
+    if (texture_object == NULL || texture_object->texture_name == 0 || texture_object->texture_2d == NULL) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    // Any remaining errors (level, region bounds, storage format) are raised by glTexSubImage2D,
+    // the readback itself has no side effects. A zero-sized copy only validates.
+    const GLenum format = (GLenum)texture_object->internalformat;
+    GLubyte *buffer = NULL;
+    if (w > 0 && h > 0) {
+        buffer = copy_tex_read_framebuffer(x, y, w, h, format);
+        if (!buffer) {
+            return;
+        }
+    }
+    const GLint old_unpack = context->pixel_store.unpack_alignment;
+    context->pixel_store.unpack_alignment = 1;
+    glTexSubImage2D(target, level, xoff, yoff, w, h, format, GL_UNSIGNED_BYTE, buffer);
+    context->pixel_store.unpack_alignment = old_unpack;
+    if (buffer) {
+        GLI_FREE(buffer);
+    }
 }
 
 void gliTextureFlush(void)
