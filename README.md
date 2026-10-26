@@ -23,6 +23,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Stencil Wrap (`GL_OES_stencil_wrap`)
 * [x] 32-bit Indices (`GL_OES_element_index_uint`)
 * [x] Point Size Arrays (`GL_OES_point_size_array`)
+* [x] Packed Depth Stencil (24Z8S) (`GL_OES_packed_depth_stencil`)
 
 ## How to use
 ### CMake
@@ -134,7 +135,7 @@ int main (int argc, char **argv)
 
 ## Todo
 * [ ] Lots of FIXMEs
-* [ ] glTexSubImage2D, glCopyTexImage2D, glCopyTexSubImage2D (and compressed?)
+* [ ] glCompressedTexImage2D, glCompressedTexSubImage2D
 
 ## Attribution
 * Some lighting code taken from https://github.com/JayFoxRox/xgu-gl
