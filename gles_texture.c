@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES
 #include "gles_private.h"
 #include <swizzle.h>
 
@@ -933,6 +934,10 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
             const GLubyte *src_pixels = (GLubyte *)pixels;
             if (type == GL_UNSIGNED_BYTE && (format == GL_RGB || format == GL_RGBA)) {
                 GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+                if (converted_pixels == NULL) {
+                    gliSetError(GL_OUT_OF_MEMORY);
+                    return;
+                }
                 convert_to_bgra(src_pixels, converted_pixels, width * height, (format == GL_RGBA) ? 4 : 3);
                 src_pixels = converted_pixels;
             }
@@ -950,6 +955,23 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
     }
 
     // level == 0
+    if (width == 0 || height == 0) {
+        // A zero-sized image is legal and leaves the texture without image data (incomplete).
+        // Handled here because the storage code below (npot2pot, ctz) is undefined for 0.
+        if (texture_object->texture_2d != NULL) {
+            xgu_texture_t *old_tex = (xgu_texture_t *)texture_object->texture_2d;
+            if (old_tex->data) {
+                MmFreeContiguousMemory(old_tex->data);
+            }
+            GLI_FREE(old_tex);
+        }
+        texture_object->texture_2d = NULL;
+        texture_object->internalformat = internalformat;
+        texture_object->texture_object_dirty = GL_TRUE;
+        context->texture_environment.combiner_dirty = GL_TRUE;
+        return;
+    }
+
     xgu_texture_t *xgu_texture = GLI_MALLOC(sizeof(xgu_texture_t));
     if (xgu_texture == NULL) {
         gliSetError(GL_OUT_OF_MEMORY);
@@ -1033,6 +1055,12 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
 
         if (type == GL_UNSIGNED_BYTE && (format == GL_RGB || format == GL_RGBA)) {
             GLubyte *converted_pixels = GLI_MALLOC(src_pitch * height);
+            if (converted_pixels == NULL) {
+                gliSetError(GL_OUT_OF_MEMORY);
+                MmFreeContiguousMemory(xgu_texture->data);
+                GLI_FREE(xgu_texture);
+                return;
+            }
             convert_to_bgra(src_pixels, converted_pixels, width * height, (format == GL_RGBA) ? 4 : 3);
             src_pixels = converted_pixels;
         }
@@ -1067,6 +1095,10 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
 
     texture_object->texture_2d = xgu_texture;
     texture_object->internalformat = internalformat;
+    // The combiner's active stages depend on whether the texture has image data
+    context->texture_environment.combiner_dirty = GL_TRUE;
+    // u_scale/v_scale may have changed (POT swizzled vs NPOT linear), and they are folded into the texture matrix
+    context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
 
     if (xgu_texture->swizzled && texture_object->generate_mipmap) {
         gliGenSwizzledMipmaps(xgu_texture);
