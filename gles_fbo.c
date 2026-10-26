@@ -505,12 +505,20 @@ glFramebufferTexture2DOES(GLenum target, GLenum attachment, GLenum textarget, GL
 
                 xgu_texture->data = new_data;
                 xgu_texture->data_physical_address = (void *)MmGetPhysicalAddress(new_data);
+                xgu_texture->data_size = size;
+                xgu_texture->mipmap_levels = 1; // Only level 0 was kept, linear textures have no mipmaps
                 xgu_texture->pitch = new_pitch;
                 xgu_texture->swizzled = 0;
                 xgu_texture->u_scale = (GLfloat)xgu_texture->data_width;
                 xgu_texture->v_scale = (GLfloat)xgu_texture->data_height;
                 xgu_texture->format = unswizzle_texture_format(xgu_texture->format);
                 texture_object->texture_object_dirty = GL_TRUE;
+                // The scales are folded into the texture matrix of every unit this texture is bound to
+                for (GLuint i = 0; i < GLI_MAX_TEXTURE_UNITS; i++) {
+                    if (context->texture_environment.texture_units[i].bound_texture_object == texture_object) {
+                        context->transformation_state.texture_matrix_dirty[i] = GL_TRUE;
+                    }
+                }
             } else {
                 gliSetError(GL_OUT_OF_MEMORY);
                 return;
