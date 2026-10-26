@@ -441,16 +441,60 @@ GL_API void GL_APIENTRY glNormal3x(GLfixed nx, GLfixed ny, GLfixed nz)
 
 GL_API void GL_APIENTRY glReadPixels(GLint x, GLint y, GLsizei w, GLsizei h, GLenum format, GLenum type, void *pixels)
 {
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    (void)format;
-    (void)type;
-    (void)pixels;
-    // FIXME, this uses pack,unpack alignments too
+    gli_context_t *context = gliGetContext();
+    if (w < 0 || h < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+    if ((format != GL_ALPHA && format != GL_RGB && format != GL_RGBA) ||
+        (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_SHORT_5_6_5 && type != GL_UNSIGNED_SHORT_4_4_4_4 &&
+         type != GL_UNSIGNED_SHORT_5_5_5_1)) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+    // GL_RGBA / GL_UNSIGNED_BYTE is the format reported by GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES.
+    if (format != GL_RGBA || type != GL_UNSIGNED_BYTE) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+    if (context->fbo_binding != 0) {
+        // Only the default framebuffer (A8R8G8B8 back buffer) is supported.
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+    if (!pixels || w == 0 || h == 0) {
+        return;
+    }
+
     glFinish();
-    // ..
+
+    const GLint fbw = (GLint)pb_back_buffer_width();
+    const GLint fbh = (GLint)pb_back_buffer_height();
+    const size_t pitch = pb_back_buffer_pitch();
+    const uint8_t *fb = (const uint8_t *)pb_back_buffer();
+
+    const GLint bpp = 4;
+    const GLint alignment = context->pixel_store.pack_alignment;
+    size_t row_size = (size_t)w * bpp;
+    row_size = (row_size + alignment - 1) / alignment * alignment;
+
+    for (GLint row = 0; row < h; row++) {
+        uint8_t *dst = (uint8_t *)pixels + row * row_size;
+        const GLint gl_y = y + row;
+        // GL's origin is bottom-left, the framebuffer's is top-left.
+        const GLint fb_y = fbh - 1 - gl_y;
+        for (GLint col = 0; col < w; col++, dst += bpp) {
+            const GLint fb_x = x + col;
+            if (fb_x < 0 || fb_x >= fbw || fb_y < 0 || fb_y >= fbh) {
+                continue;
+            }
+            const uint8_t *src = fb + (size_t)fb_y * pitch + (size_t)fb_x * 4;
+            dst[0] = src[2];
+            dst[1] = src[1];
+            dst[2] = src[0];
+            dst[3] = src[3];
+        }
+    }
 }
 
 static inline uint32_t *push_attrib_pointer(uint32_t *p,
