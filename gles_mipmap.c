@@ -31,6 +31,36 @@ void gliCalcMipmapChain(GLuint width, GLuint height, GLuint bytes_per_pixel, GLu
     }
 }
 
+void gliCalcCompressedMipmapChain(GLuint width, GLuint height, GLuint block_size, GLuint *out_size, uint8_t *out_levels)
+{
+    GLuint size = 0;
+    uint8_t levels = 0;
+    GLuint w = width;
+    GLuint h = height;
+
+    while (w > 0 && h > 0) {
+        // Levels smaller than 4x4 still occupy one full block
+        size += ((w + 3) / 4) * ((h + 3) / 4) * block_size;
+        levels++;
+        if (w == 1 && h == 1) {
+            break;
+        }
+        if (w > 1) {
+            w /= 2;
+        }
+        if (h > 1) {
+            h /= 2;
+        }
+    }
+
+    if (out_size) {
+        *out_size = size;
+    }
+    if (out_levels) {
+        *out_levels = levels;
+    }
+}
+
 // Simple box filter to generate the next mipmap level
 static void generate_next_mipmap_level(const GLubyte *src, GLuint src_w, GLuint src_h, GLuint bpp, GLubyte *dst)
 {
@@ -139,8 +169,8 @@ GL_API void GL_APIENTRY glGenerateMipmapOES(GLenum target)
 
     xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
 
-    // Mipmaps require swizzled textures (which in turn requires power-of-two)
-    if (!xgu_texture->swizzled) {
+    // Mipmaps require swizzled uncompressed textures (which in turn requires power-of-two)
+    if (!xgu_texture->swizzled || gliIsCompressedFormat(texture_object->internalformat)) {
         gliSetError(GL_INVALID_OPERATION);
         return;
     }
