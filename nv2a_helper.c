@@ -631,6 +631,9 @@ void combiner_set_texture_env(void)
                 tu->texture_2d_enabled && tu->bound_texture_object != &tu->unbound_texture_object &&
                 tu->bound_texture_object != NULL && tu->bound_texture_object->texture_2d != NULL;
             HASH_MIX(stage_active);
+            if (stage_active) {
+                HASH_MIX(tu->bound_texture_object->internalformat);
+            }
             HASH_MIX(tu->tex_env_mode);
             HASH_MIX(FLOAT4_TO_PACKED_ARGB32(tu->tex_env_color));
             HASH_MIX(tu->coord_replace_oes_enabled);
@@ -707,12 +710,17 @@ void combiner_set_texture_env(void)
         DWORD ALPHA_IN = 0;
         DWORD ALPHA_OUT = 0;
 
+        const GLboolean has_alpha = gliTextureFormatHasAlpha(texture_unit->bound_texture_object->internalformat);
+        // ES 1.1 Table 3.9: At = 1.0 for texture formats without an alpha channel
+        const DWORD tex_alpha_b = has_alpha ? (PB_MASK(SRC_B, REG_TEXTURE0 + i) | SRC_B_FLAG_ALPHA)
+                                            : (PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT);
+
         switch (texture_unit->tex_env_mode) {
             case GL_ADD:
                 // ---------------------------------------------------------
                 // ADD:
                 //   C = clamp(Cf + Ct)
-                //   A = Af
+                //   A = Af * At (Af for formats without alpha)
                 //
                 // Implemented as:
                 //   AB = Cf * 1
@@ -731,11 +739,9 @@ void combiner_set_texture_env(void)
                 // SUM (AB + CD) -> SPARE0.rgb
                 RGB_OUT |= PB_MASK(OP_AxB_PLUS_CxD, REG_SPARE0);
 
-                // ALPHA: pass-through Af
+                // ALPHA: A = STAGE_INPUT.a, B = At
                 ALPHA_IN |= PB_MASK(SRC_A, STAGE_INPUT) | SRC_A_FLAG_ALPHA;
-                ALPHA_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
-
-                // SUM (AB + CD) -> SPARE0.a
+                ALPHA_IN |= tex_alpha_b;
                 ALPHA_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
                 break;
 
@@ -743,16 +749,16 @@ void combiner_set_texture_env(void)
                 // ---------------------------------------------------------
                 // MODULATE:
                 //   C = Cf * Ct
-                //   A = Af * At
+                //   A = Af * At (At = 1.0 for RGB textures without alpha)
                 // ---------------------------------------------------------
 
                 // COLOR: A = STAGE_INPUT.rgb, B = texture.rgb
                 RGB_IN |= PB_MASK(SRC_A, STAGE_INPUT);
                 RGB_IN |= PB_MASK(SRC_B, REG_TEXTURE0 + i);
 
-                // ALPHA: A = STAGE_INPUT.a, B = texture.a
+                // ALPHA: A = STAGE_INPUT.a, B = At
                 ALPHA_IN |= PB_MASK(SRC_A, STAGE_INPUT) | SRC_A_FLAG_ALPHA;
-                ALPHA_IN |= PB_MASK(SRC_B, REG_TEXTURE0 + i) | SRC_B_FLAG_ALPHA;
+                ALPHA_IN |= tex_alpha_b;
 
                 RGB_OUT |= PB_MASK(OP_AxB, REG_SPARE0); // SPARE0 = A*B
                 ALPHA_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
@@ -762,15 +768,15 @@ void combiner_set_texture_env(void)
                 // ---------------------------------------------------------
                 // REPLACE:
                 //   C = Ct
-                //   A = At   (for RGBA textures; for RGB, A = Af)
+                //   A = At (for RGBA textures; for RGB, A = Af)
                 // ---------------------------------------------------------
 
                 // COLOR: out.rgb = texture.rgb
                 RGB_IN |= PB_MASK(SRC_A, REG_TEXTURE0 + i);
                 RGB_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_INVERT; // B=1, so A*B = tex
 
-                // ALPHA: out.a = texture.a
-                ALPHA_IN |= PB_MASK(SRC_A, REG_TEXTURE0 + i) | SRC_A_FLAG_ALPHA;
+                // ALPHA: out.a = At (if has alpha) or Af (if no alpha)
+                ALPHA_IN |= PB_MASK(SRC_A, has_alpha ? (REG_TEXTURE0 + i) : STAGE_INPUT) | SRC_A_FLAG_ALPHA;
                 ALPHA_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
 
                 RGB_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
@@ -779,25 +785,26 @@ void combiner_set_texture_env(void)
 
             case GL_DECAL:
                 // ---------------------------------------------------------
-                // DECAL (for RGBA textures):
-                //   C = Cf * (1 - At) + Ct * At
-                //   A = Af
-                //
-                // Using:
-                //   AB = Cf * (1 - At)
-                //   CD = Ct * At
-                //   SUM = AB + CD -> SPARE0
+                // DECAL:
+                //   For RGBA: C = Cf * (1 - At) + Ct * At, A = Af
+                //   For RGB:  C = Ct (since At = 1.0), A = Af
                 // ---------------------------------------------------------
 
-                // COLOR AB: A = STAGE_INPUT.rgb, B = texture alpha with invert (1 - At)
-                RGB_IN |= PB_MASK(SRC_A, STAGE_INPUT);
-                RGB_IN |= PB_MASK(SRC_B, REG_TEXTURE0 + i) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
+                if (has_alpha) {
+                    // COLOR AB: A = STAGE_INPUT.rgb, B = texture alpha with invert (1 - At)
+                    RGB_IN |= PB_MASK(SRC_A, STAGE_INPUT);
+                    RGB_IN |= PB_MASK(SRC_B, REG_TEXTURE0 + i) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
 
-                // COLOR CD: C = texture.rgb, D = texture alpha
-                RGB_IN |= PB_MASK(SRC_C, REG_TEXTURE0 + i);
-                RGB_IN |= PB_MASK(SRC_D, REG_TEXTURE0 + i) | SRC_D_FLAG_ALPHA;
+                    // COLOR CD: C = texture.rgb, D = texture alpha
+                    RGB_IN |= PB_MASK(SRC_C, REG_TEXTURE0 + i);
+                    RGB_IN |= PB_MASK(SRC_D, REG_TEXTURE0 + i) | SRC_D_FLAG_ALPHA;
 
-                RGB_OUT |= PB_MASK(OP_AxB_PLUS_CxD, REG_SPARE0); // AB + CD
+                    RGB_OUT |= PB_MASK(OP_AxB_PLUS_CxD, REG_SPARE0); // AB + CD
+                } else {
+                    RGB_IN |= PB_MASK(SRC_A, REG_TEXTURE0 + i);
+                    RGB_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_INVERT;
+                    RGB_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
+                }
 
                 // Alpha unchanged: Af
                 ALPHA_IN |= PB_MASK(SRC_A, STAGE_INPUT) | SRC_A_FLAG_ALPHA;
@@ -807,16 +814,11 @@ void combiner_set_texture_env(void)
 
             case GL_BLEND:
                 // ---------------------------------------------------------
-                // BLEND (RGBA textures):
+                // BLEND:
                 //   C = Cf * (1 - Ct) + Cc * Ct
-                //   A = Af
+                //   A = Af (for RGB) or Af * At (for RGBA)
                 //
                 // Cc is GL_TEXTURE_ENV_COLOR in REG_CONSTANT0.
-                //
-                // Implement:
-                //   AB = Cf * (1 - Ct)
-                //   CD = Cc * Ct
-                //   SUM = AB + CD -> SPARE0
                 // ---------------------------------------------------------
 
                 // COLOR AB: A = STAGE_INPUT.rgb, B = (1 - Ct.rgb)
@@ -829,9 +831,9 @@ void combiner_set_texture_env(void)
 
                 RGB_OUT |= PB_MASK(OP_AxB_PLUS_CxD, REG_SPARE0); // AB + CD -> SPARE0
 
-                // Alpha unchanged: Af
+                // ALPHA: A = STAGE_INPUT.a, B = At
                 ALPHA_IN |= PB_MASK(SRC_A, STAGE_INPUT) | SRC_A_FLAG_ALPHA;
-                ALPHA_IN |= PB_MASK(SRC_B, REG_ZERO) | SRC_B_FLAG_ALPHA | SRC_B_FLAG_INVERT;
+                ALPHA_IN |= tex_alpha_b;
                 ALPHA_OUT |= PB_MASK(OP_AxB, REG_SPARE0);
                 break;
 
@@ -845,12 +847,27 @@ void combiner_set_texture_env(void)
                 for (GLuint j = 0; j < 2; j++) {
                     const GLboolean is_alpha = (j == 1);
 
-                    const DWORD arg0 = get_source(sources[j][0], STAGE_INPUT, i);
-                    const DWORD arg1 = get_source(sources[j][1], STAGE_INPUT, i);
-                    const DWORD arg2 = get_source(sources[j][2], STAGE_INPUT, i);
+                    // The texture alpha of formats without alpha is 1 (ES 1.1 Table 3.9), but the hardware may
+                    // return something else (e.g. 0 for DXT1 3-color block texels). Read it as an inverted zero.
+                    DWORD args[3];
+                    GLenum op[3];
+                    for (GLuint k = 0; k < 3; k++) {
+                        args[k] = get_source(sources[j][k], STAGE_INPUT, i);
+                        op[k] = ops[j][k];
+                        const GLboolean reads_alpha =
+                            is_alpha || op[k] == GL_SRC_ALPHA || op[k] == GL_ONE_MINUS_SRC_ALPHA;
+                        if (sources[j][k] == GL_TEXTURE && reads_alpha && !has_alpha) {
+                            args[k] = REG_ZERO;
+                            op[k] = (op[k] == GL_SRC_ALPHA || op[k] == GL_SRC_COLOR) ? GL_ONE_MINUS_SRC_ALPHA
+                                                                                     : GL_SRC_ALPHA;
+                        }
+                    }
+                    const DWORD arg0 = args[0];
+                    const DWORD arg1 = args[1];
+                    const DWORD arg2 = args[2];
 
                     const GLenum FUNCTION = functions[j];
-                    const GLenum *OP = ops[j];
+                    const GLenum *OP = op;
                     DWORD *INPUT = inputs[j];
                     DWORD *OUTPUT = outputs[j];
 
