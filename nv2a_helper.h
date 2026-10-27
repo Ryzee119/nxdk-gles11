@@ -8,14 +8,16 @@
 #define GLI_MAX_LIGHTS XGU_LIGHT_COUNT
 #define GLI_MAX_TEXTURE_UNITS                                                                                          \
     XGU_TEXTURE_COUNT // This is shared with clip planes (4 per stage) and only one point sprite can be enabled
-#define GLI_MAX_CLIP_PLANES   4 // One texture unit can handle 4 planes.
-#define GLI_MAX_TEXTURE_SIZE  4096
-#define GLI_VENDOR_STRING     "nxdk GLES Renderer"
-#define GLI_RENDERER_STRING   "nv2a-based GPU"
+#define GLI_MAX_CLIP_PLANES                4 // One texture unit can handle 4 planes.
+#define GLI_NUM_COMPRESSED_TEXTURE_FORMATS 14
+#define GLI_MAX_TEXTURE_SIZE               4096
+#define GLI_VENDOR_STRING                  "nxdk GLES Renderer"
+#define GLI_RENDERER_STRING                "nv2a-based GPU"
 #define GLI_EXTENSIONS_STRING                                                                                          \
     "GL_OES_element_index_uint GL_OES_point_size_array GL_OES_framebuffer_object GL_OES_packed_depth_stencil "         \
     "GL_OES_point_sprite GL_OES_blend_subtract GL_OES_blend_equation_separate GL_OES_texture_mirrored_repeat "         \
-    "GL_OES_stencil_wrap"
+    "GL_OES_stencil_wrap GL_OES_compressed_paletted_texture GL_EXT_texture_compression_dxt1 "                          \
+    "GL_ANGLE_texture_compression_dxt3 GL_ANGLE_texture_compression_dxt5"
 
 // For line and point sizes xbox takes a 6.3 fix point, total of 9 bits. Max = 0x1FF / 2^3 = 63.875f
 #define GLI_MAX_ALIASED_POINT_SIZE ((float)0x1FF / (float)(1 << 3))
@@ -29,7 +31,7 @@
 #define PB_MASK(mask, val) (((val) << (__builtin_ffs(mask) - 1)) & (mask))
 
 #ifndef NV097_SET_PROVOKING_VERTEX
-#define NV097_SET_PROVOKING_VERTEX 0x000009FC
+#define NV097_SET_PROVOKING_VERTEX      0x000009FC
 #define NV097_SET_PROVOKING_VERTEX_LAST 0
 #endif
 

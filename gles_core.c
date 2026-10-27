@@ -691,7 +691,26 @@ void glContextInit(GLint window_width, GLint window_height)
     context->implementation_limits.max_texture_units = GLI_MAX_TEXTURE_UNITS;
     context->implementation_limits.sample_buffers = 0;
     context->implementation_limits.samples = 0;
-    context->implementation_limits.compressed_texture_formats = NULL;
+    static GLenum supported_compressed_formats[] = {
+        GL_PALETTE4_RGB8_OES,
+        GL_PALETTE4_RGBA8_OES,
+        GL_PALETTE4_R5_G6_B5_OES,
+        GL_PALETTE4_RGBA4_OES,
+        GL_PALETTE4_RGB5_A1_OES,
+        GL_PALETTE8_RGB8_OES,
+        GL_PALETTE8_RGBA8_OES,
+        GL_PALETTE8_R5_G6_B5_OES,
+        GL_PALETTE8_RGBA4_OES,
+        GL_PALETTE8_RGB5_A1_OES,
+        GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
+        GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
+        GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
+        GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
+    };
+    _Static_assert(sizeof(supported_compressed_formats) / sizeof(supported_compressed_formats[0]) ==
+                       GLI_NUM_COMPRESSED_TEXTURE_FORMATS,
+                   "GLI_NUM_COMPRESSED_TEXTURE_FORMATS out of sync");
+    context->implementation_limits.compressed_texture_formats = supported_compressed_formats;
     context->implementation_limits.num_compressed_texture_formats = GLI_NUM_COMPRESSED_TEXTURE_FORMATS;
     context->current_surface_width = window_width;
     context->current_surface_height = window_height;
