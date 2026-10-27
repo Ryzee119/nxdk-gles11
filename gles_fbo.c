@@ -439,6 +439,42 @@ GL_API void GL_APIENTRY glFramebufferRenderbufferOES(GLenum target,
     context->fbo_state_dirty = GL_TRUE;
 }
 
+// Returns whether a texture can be used as a color attachment, and if so its surface format.
+// Compressed (S3TC and paletted) and luminance/alpha formats are not color-renderable.
+static GLboolean texture_color_surface_format(const texture_object_t *texture_object, uint32_t *fmt_color)
+{
+    const xgu_texture_t *xgu_texture = (const xgu_texture_t *)texture_object->texture_2d;
+    if (!xgu_texture || gliIsCompressedFormat(texture_object->internalformat)) {
+        return GL_FALSE;
+    }
+
+    uint32_t fmt;
+    switch (xgu_texture->format) {
+        case XGU_TEXTURE_FORMAT_R5G6B5_SWIZZLED:
+        case XGU_TEXTURE_FORMAT_R5G6B5:
+            fmt = NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5;
+            break;
+        case XGU_TEXTURE_FORMAT_A1R5G5B5_SWIZZLED:
+        case XGU_TEXTURE_FORMAT_A1R5G5B5:
+            fmt = NV097_SET_SURFACE_FORMAT_COLOR_LE_X1R5G5B5_O1R5G5B5;
+            break;
+        case XGU_TEXTURE_FORMAT_X8R8G8B8_SWIZZLED:
+        case XGU_TEXTURE_FORMAT_X8R8G8B8:
+            fmt = NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_Z8R8G8B8;
+            break;
+        case XGU_TEXTURE_FORMAT_A8R8G8B8_SWIZZLED:
+        case XGU_TEXTURE_FORMAT_A8R8G8B8:
+            fmt = NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8;
+            break;
+        default:
+            return GL_FALSE;
+    }
+    if (fmt_color) {
+        *fmt_color = fmt;
+    }
+    return GL_TRUE;
+}
+
 GL_API void GL_APIENTRY
 glFramebufferTexture2DOES(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
 {
@@ -488,7 +524,9 @@ glFramebufferTexture2DOES(GLenum target, GLenum attachment, GLenum textarget, GL
 
         // Convert swizzled textures to linear when attached to an FBO.
         // This texture will stay linear forever now. FIXME?
-        if (xgu_texture && xgu_texture->swizzled) {
+        // Textures that can't be rendered to are attached untouched, the framebuffer is then incomplete
+        // (OES_framebuffer_object), and converting would destroy compressed blocks and mipmaps for nothing.
+        if (xgu_texture && xgu_texture->swizzled && texture_color_surface_format(texture_object, NULL)) {
             uint32_t new_pitch = (xgu_texture->data_width * xgu_texture->bytes_per_pixel + 63) & ~63;
             uint32_t size = new_pitch * xgu_texture->data_height;
 
@@ -591,6 +629,11 @@ GL_API GLenum GL_APIENTRY glCheckFramebufferStatusOES(GLenum target)
     VALIDATE_ATTACHMENT(fbo->stencil);
 
 #undef VALIDATE_ATTACHMENT
+
+    // A color attachment must have a color-renderable format, otherwise it is not attachment complete
+    if (fbo->color.type == GL_TEXTURE_2D && !texture_color_surface_format(fbo->color.texture, NULL)) {
+        return GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_OES;
+    }
     return GL_FRAMEBUFFER_COMPLETE_OES;
 }
 
@@ -801,27 +844,8 @@ void gliFBOFlush(void)
         clip_height = xgu_texture->tex_height;
         pitch = (xgu_texture->pitch + 63) & ~63;
 
-        switch (xgu_texture->format) {
-            case XGU_TEXTURE_FORMAT_R5G6B5_SWIZZLED:
-            case XGU_TEXTURE_FORMAT_R5G6B5:
-                fmt_color = NV097_SET_SURFACE_FORMAT_COLOR_LE_R5G6B5;
-                break;
-            case XGU_TEXTURE_FORMAT_A1R5G5B5_SWIZZLED:
-            case XGU_TEXTURE_FORMAT_A1R5G5B5:
-                fmt_color = NV097_SET_SURFACE_FORMAT_COLOR_LE_X1R5G5B5_O1R5G5B5;
-                break;
-            case XGU_TEXTURE_FORMAT_X8R8G8B8_SWIZZLED:
-            case XGU_TEXTURE_FORMAT_X8R8G8B8:
-                fmt_color = NV097_SET_SURFACE_FORMAT_COLOR_LE_X8R8G8B8_Z8R8G8B8;
-                break;
-            case XGU_TEXTURE_FORMAT_A8R8G8B8_SWIZZLED:
-            case XGU_TEXTURE_FORMAT_A8R8G8B8:
-                fmt_color = NV097_SET_SURFACE_FORMAT_COLOR_LE_A8R8G8B8;
-                break;
-            default:
-                assert(0);
-                return;
-        }
+        // glCheckFramebufferStatusOES above guarantees the format is color-renderable
+        texture_color_surface_format(fbo->color.texture, &fmt_color);
 
         if (xgu_texture->swizzled) {
             fmt_type = NV097_SET_SURFACE_FORMAT_TYPE_SWIZZLE;
