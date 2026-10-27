@@ -24,6 +24,8 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] 32-bit Indices (`GL_OES_element_index_uint`)
 * [x] Point Size Arrays (`GL_OES_point_size_array`)
 * [x] Packed Depth Stencil (24Z8S) (`GL_OES_packed_depth_stencil`)
+* [x] Paletted Textures (`GL_OES_compressed_paletted_texture`, decoded on the CPU)
+* [x] Compressed Textures (DXT1/DXT3/DXT5) (`GL_EXT_texture_compression_dxt1`, `GL_ANGLE_texture_compression_dxt3`, `GL_ANGLE_texture_compression_dxt5`)
 
 ## How to use
 ### CMake
@@ -135,7 +137,6 @@ int main (int argc, char **argv)
 
 ## Todo
 * [ ] Lots of FIXMEs
-* [ ] glCompressedTexImage2D, glCompressedTexSubImage2D
 
 ## Attribution
 * Some lighting code taken from https://github.com/JayFoxRox/xgu-gl
