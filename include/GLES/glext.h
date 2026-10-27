@@ -84,7 +84,7 @@ extern "C" {
 #define GL_EXT_read_format_bgra 0
 #define GL_EXT_robustness 
 #define GL_EXT_sRGB 0
-#define GL_EXT_texture_compression_dxt1 0
+// #define GL_EXT_texture_compression_dxt1 0
 #define GL_EXT_texture_filter_anisotropic 0
 #define GL_EXT_texture_format_BGRA8888 0
 #define GL_EXT_texture_lod_bias 0
@@ -770,6 +770,24 @@ GL_API void GL_APIENTRY glGetnUniformivEXT (GLuint program, GLint location, GLsi
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT   0x83F0
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
 #endif /* GL_EXT_texture_compression_dxt1 */
+
+#ifndef GL_ANGLE_texture_compression_dxt3
+#define GL_ANGLE_texture_compression_dxt3 1
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_ANGLE 0x83F2
+#endif /* GL_ANGLE_texture_compression_dxt3 */
+
+#ifndef GL_ANGLE_texture_compression_dxt5
+#define GL_ANGLE_texture_compression_dxt5 1
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_ANGLE 0x83F3
+#endif /* GL_ANGLE_texture_compression_dxt5 */
+
+/* Same values as the ANGLE tokens, provided for code written against EXT_texture_compression_s3tc */
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT  0x83F2
+#endif
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
+#endif
 
 #ifndef GL_EXT_texture_filter_anisotropic
 #define GL_EXT_texture_filter_anisotropic 1
