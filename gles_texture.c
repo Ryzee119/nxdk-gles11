@@ -97,6 +97,9 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         prev_has_tex ? (const xgu_texture_t *)texture_unit->bound_texture_object->texture_2d : NULL;
     const GLfloat prev_u_scale = prev_xgu ? prev_xgu->u_scale : 1.0f;
     const GLfloat prev_v_scale = prev_xgu ? prev_xgu->v_scale : 1.0f;
+    // The combiners route texture alpha differently for formats without alpha (see combiner_set_texture_env)
+    const GLboolean prev_has_alpha =
+        prev_has_tex && gliTextureFormatHasAlpha(texture_unit->bound_texture_object->internalformat);
 
     // If the texture name is zero just unbind any texture currently bound to the target
     if (texture == 0) {
@@ -118,7 +121,8 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
 
         const GLboolean has_tex = (texture_object->texture_2d != NULL);
-        if (has_tex != prev_has_tex) {
+        const GLboolean has_alpha = has_tex && gliTextureFormatHasAlpha(texture_object->internalformat);
+        if (has_tex != prev_has_tex || has_alpha != prev_has_alpha) {
             context->texture_environment.combiner_dirty = GL_TRUE;
         }
 
@@ -883,8 +887,8 @@ GL_API void GL_APIENTRY glTexImage2D(GLenum target,
         }
 
         xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
-        if (!xgu_texture->swizzled) {
-            gliSetError(GL_INVALID_OPERATION); // Mipmaps require POT swizzled textures
+        if (!xgu_texture->swizzled || internalformat != texture_object->internalformat) {
+            gliSetError(GL_INVALID_OPERATION); // Mipmaps require POT swizzled textures and matching internalformat
             return;
         }
 
@@ -1292,6 +1296,153 @@ GL_API void GL_APIENTRY glTexSubImage2D(GLenum target,
     }
 }
 
+static inline GLuint gliCompressedBlockSize(GLenum format)
+{
+    return (format == GL_COMPRESSED_RGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT) ? 8 : 16;
+}
+
+static inline GLsizei gliCompressedImageSize(GLsizei width, GLsizei height, GLenum format)
+{
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+    return ((width + 3) / 4) * ((height + 3) / 4) * (GLsizei)gliCompressedBlockSize(format);
+}
+
+static inline XguTexFormatColor gliCompressedToNvFormat(GLenum format)
+{
+    switch (format) {
+        case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
+        case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+            return XGU_TEXTURE_FORMAT_DXT1;
+        case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+            return XGU_TEXTURE_FORMAT_DXT3;
+        case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+            return XGU_TEXTURE_FORMAT_DXT5;
+        default:
+            return (XguTexFormatColor)-1;
+    }
+}
+
+static GLuint compressed_level_dim_and_offset(
+    const xgu_texture_t *tex, GLint level, GLenum format, GLuint *out_w, GLuint *out_h)
+{
+    GLuint w = tex->tex_width;
+    GLuint h = tex->tex_height;
+    GLuint offset = 0;
+    for (GLint i = 0; i < level; i++) {
+        offset += (GLuint)gliCompressedImageSize((GLsizei)w, (GLsizei)h, format);
+        if (w > 1) {
+            w /= 2;
+        }
+        if (h > 1) {
+            h /= 2;
+        }
+    }
+    *out_w = w;
+    *out_h = h;
+    return offset;
+}
+
+// OES_compressed_paletted_texture (core in ES 1.1). NV2A can't sample these, so each level is expanded
+// on the CPU and uploaded through glTexImage2D. The data is the palette followed by the indices of each mip level,
+// tightly packed starting at the base level. 4-bit indices hold the first texel in the high nibble.
+static void compressed_paletted_tex_image(
+    GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei imageSize, const void *data)
+{
+    static const struct
+    {
+        GLenum format;
+        GLenum type;
+        GLuint entry_size;
+    } entry_formats[] = {
+        {GL_RGB,  GL_UNSIGNED_BYTE,          3},
+        {GL_RGBA, GL_UNSIGNED_BYTE,          4},
+        {GL_RGB,  GL_UNSIGNED_SHORT_5_6_5,   2},
+        {GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, 2},
+        {GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, 2},
+    };
+    gli_context_t *context = gliGetContext();
+    const GLuint index = internalformat - GL_PALETTE4_RGB8_OES;
+    const GLboolean four_bit = index < 5;
+    const GLenum format = entry_formats[index % 5].format;
+    const GLenum type = entry_formats[index % 5].type;
+    const GLuint entry_size = entry_formats[index % 5].entry_size;
+    const size_t palette_size = (size_t)(four_bit ? 16 : 256) * entry_size;
+
+    // level must be <= 0; -level is the number of mip levels after the base level in data.
+    // A mip chain needs a power-of-two base level and can't go past 1x1.
+    if (level > 0 || level < -31) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+    const GLint num_levels = 1 - level;
+    if (num_levels > 1 && (width == 0 || height == 0 || (width & (width - 1)) || (height & (height - 1)) ||
+                           (GLI_MAX(width, height) >> (num_levels - 1)) == 0)) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    size_t expected_size = palette_size;
+    for (GLint i = 0; i < num_levels; i++) {
+        const size_t texels = (width && height) ? (size_t)GLI_MAX(1, width >> i) * GLI_MAX(1, height >> i) : 0;
+        expected_size += four_bit ? (texels + 1) / 2 : texels;
+    }
+    if ((size_t)imageSize != expected_size) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_object_t *texture_object = context->texture_environment.texture_units[texture_index].bound_texture_object;
+    const GLenum pending_error = context->last_error;
+    const GLint old_unpack = context->pixel_store.unpack_alignment;
+    const GLboolean old_gen_mipmap = texture_object->generate_mipmap;
+    context->last_error = GL_NO_ERROR;
+    context->pixel_store.unpack_alignment = 1;
+    texture_object->generate_mipmap = GL_FALSE;
+
+    const GLubyte *palette = (const GLubyte *)data;
+    const GLubyte *indices = palette ? palette + palette_size : NULL;
+    for (GLint i = 0; i < num_levels; i++) {
+        const GLsizei w = (width && height) ? GLI_MAX(1, width >> i) : 0;
+        const GLsizei h = (width && height) ? GLI_MAX(1, height >> i) : 0;
+        const size_t texels = (size_t)w * (size_t)h;
+
+        GLubyte *image = NULL;
+        if (indices && texels) {
+            image = GLI_MALLOC(texels * entry_size);
+            if (!image) {
+                gliSetError(GL_OUT_OF_MEMORY);
+                break;
+            }
+            for (size_t t = 0; t < texels; t++) {
+                const GLuint entry = four_bit ? ((indices[t / 2] >> ((t & 1) ? 0 : 4)) & 0xF) : indices[t];
+                gli_memcpy(image + t * entry_size, palette + entry * entry_size, entry_size);
+            }
+            indices += four_bit ? (texels + 1) / 2 : texels;
+        }
+
+        glTexImage2D(GL_TEXTURE_2D, i, format, w, h, 0, format, type, image);
+        if (image) {
+            GLI_FREE(image);
+        }
+        if (context->last_error != GL_NO_ERROR) {
+            break;
+        }
+    }
+
+    context->pixel_store.unpack_alignment = old_unpack;
+    texture_object->generate_mipmap = old_gen_mipmap;
+    if (context->last_error == GL_NO_ERROR) {
+        // Keep the compressed format so TexSubImage2D, CopyTexSubImage2D and mipmap generation are rejected
+        texture_object->internalformat = internalformat;
+    }
+    if (pending_error != GL_NO_ERROR) {
+        context->last_error = pending_error;
+    }
+}
+
 GL_API void GL_APIENTRY glCompressedTexImage2D(GLenum target,
                                                GLint level,
                                                GLenum internalformat,
@@ -1301,15 +1452,161 @@ GL_API void GL_APIENTRY glCompressedTexImage2D(GLenum target,
                                                GLsizei imageSize,
                                                const void *data)
 {
-    assert(0 && "glCompressedTexImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)internalformat;
-    (void)width;
-    (void)height;
-    (void)border;
-    (void)imageSize;
-    (void)data;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (!gliIsCompressedFormat(internalformat)) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    if (border != 0 || width < 0 || height < 0 || imageSize < 0 || width > GLI_MAX_TEXTURE_SIZE ||
+        height > GLI_MAX_TEXTURE_SIZE) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    // Paletted formats use a non-positive level to encode the number of mip levels
+    if (gliIsPalettedFormat(internalformat)) {
+        compressed_paletted_tex_image(level, internalformat, width, height, imageSize, data);
+        return;
+    }
+
+    if (level < 0 || (width & (width - 1)) || (height & (height - 1)) ||
+        imageSize != gliCompressedImageSize(width, height, internalformat)) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_object_t *texture_object = context->texture_environment.texture_units[texture_index].bound_texture_object;
+
+    if (level > 0) {
+        xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
+        if (!xgu_texture || internalformat != texture_object->internalformat) {
+            gliSetError(GL_INVALID_OPERATION);
+            return;
+        }
+
+        GLuint expected_w, expected_h;
+        GLuint level_offset =
+            compressed_level_dim_and_offset(xgu_texture, level, internalformat, &expected_w, &expected_h);
+        if ((GLuint)width != expected_w || (GLuint)height != expected_h) {
+            gliSetError(GL_INVALID_VALUE);
+            return;
+        }
+
+        GLuint required_size;
+        uint8_t required_levels;
+        gliCalcCompressedMipmapChain(xgu_texture->tex_width,
+                                     xgu_texture->tex_height,
+                                     gliCompressedBlockSize(internalformat),
+                                     &required_size,
+                                     &required_levels);
+        if (level >= (GLint)required_levels) {
+            gliSetError(GL_INVALID_VALUE);
+            return;
+        }
+
+        if (xgu_texture->data_size < required_size) {
+            GLubyte *new_data =
+                MmAllocateContiguousMemoryEx(required_size, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+            if (!new_data) {
+                gliSetError(GL_OUT_OF_MEMORY);
+                return;
+            }
+
+            gli_memcpy(new_data, xgu_texture->data, xgu_texture->data_size);
+            gli_memset(new_data + xgu_texture->data_size, 0, required_size - xgu_texture->data_size);
+            MmFreeContiguousMemory(xgu_texture->data);
+            xgu_texture->data = new_data;
+            xgu_texture->data_size = required_size;
+            xgu_texture->data_physical_address = (GLubyte *)MmGetPhysicalAddress(xgu_texture->data);
+        }
+
+        if ((uint8_t)(level + 1) > xgu_texture->mipmap_levels) {
+            xgu_texture->mipmap_levels = (uint8_t)(level + 1);
+        }
+
+        if (data != NULL) {
+            gli_memcpy(xgu_texture->data + level_offset, data, (size_t)imageSize);
+        } else {
+            gli_memset(xgu_texture->data + level_offset, 0, (size_t)imageSize);
+        }
+
+        texture_object->texture_object_dirty = GL_TRUE;
+        return;
+    }
+
+    // level == 0
+    if (width == 0 || height == 0) {
+        if (texture_object->texture_2d != NULL) {
+            xgu_texture_t *old_tex = (xgu_texture_t *)texture_object->texture_2d;
+            if (old_tex->data) {
+                MmFreeContiguousMemory(old_tex->data);
+            }
+            GLI_FREE(old_tex);
+        }
+        texture_object->texture_2d = NULL;
+        texture_object->internalformat = internalformat;
+        texture_object->texture_object_dirty = GL_TRUE;
+        context->texture_environment.combiner_dirty = GL_TRUE;
+        return;
+    }
+
+    xgu_texture_t *xgu_texture = GLI_MALLOC(sizeof(xgu_texture_t));
+    if (xgu_texture == NULL) {
+        gliSetError(GL_OUT_OF_MEMORY);
+        return;
+    }
+    gli_memset(xgu_texture, 0, sizeof(xgu_texture_t));
+
+    xgu_texture->swizzled = 1;
+    xgu_texture->data_width = width;
+    xgu_texture->data_height = height;
+    xgu_texture->tex_width = width;
+    xgu_texture->tex_height = height;
+    xgu_texture->bytes_per_pixel = gliCompressedBlockSize(internalformat);
+    xgu_texture->pitch = ((width + 3) / 4) * xgu_texture->bytes_per_pixel;
+    xgu_texture->u_scale = 1.0f;
+    xgu_texture->v_scale = 1.0f;
+    xgu_texture->mipmap_levels = 1;
+    xgu_texture->format = gliCompressedToNvFormat(internalformat);
+
+    xgu_texture->data_size = (GLuint)imageSize;
+    xgu_texture->data =
+        MmAllocateContiguousMemoryEx((GLuint)imageSize, 0, 0xFFFFFFFF, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    if (xgu_texture->data == NULL) {
+        GLI_FREE(xgu_texture);
+        gliSetError(GL_OUT_OF_MEMORY);
+        return;
+    }
+
+    xgu_texture->data_physical_address = (GLubyte *)MmGetPhysicalAddress(xgu_texture->data);
+
+    if (data != NULL) {
+        gli_memcpy(xgu_texture->data, data, (size_t)imageSize);
+    } else {
+        gli_memset(xgu_texture->data, 0, (size_t)imageSize);
+    }
+
+    if (texture_object->texture_2d != NULL) {
+        xgu_texture_t *old_tex = (xgu_texture_t *)texture_object->texture_2d;
+        if (old_tex->data) {
+            MmFreeContiguousMemory(old_tex->data);
+        }
+        GLI_FREE(old_tex);
+    }
+
+    texture_object->texture_2d = xgu_texture;
+    texture_object->internalformat = internalformat;
+    context->texture_environment.combiner_dirty = GL_TRUE;
+    context->transformation_state.texture_matrix_dirty[texture_index] = GL_TRUE;
+    texture_object->texture_object_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
@@ -1322,16 +1619,74 @@ GL_API void GL_APIENTRY glCompressedTexSubImage2D(GLenum target,
                                                   GLsizei imageSize,
                                                   const void *data)
 {
-    assert(0 && "glCompressedTexSubImage2D not implemented yet");
-    (void)target;
-    (void)level;
-    (void)xoff;
-    (void)yoff;
-    (void)w;
-    (void)h;
-    (void)format;
-    (void)imageSize;
-    (void)data;
+    gli_context_t *context = gliGetContext();
+
+    if (target != GL_TEXTURE_2D || !gliIsCompressedFormat(format)) {
+        gliSetError(GL_INVALID_ENUM);
+        return;
+    }
+
+    // OES_compressed_paletted_texture: paletted images can't be partially updated
+    if (gliIsPalettedFormat(format)) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (level < 0 || xoff < 0 || yoff < 0 || w < 0 || h < 0 || imageSize < 0) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
+    texture_object_t *texture_object = context->texture_environment.texture_units[texture_index].bound_texture_object;
+    if (!texture_object || texture_object->texture_name == 0 || !texture_object->texture_2d) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    xgu_texture_t *xgu_texture = (xgu_texture_t *)texture_object->texture_2d;
+    if (format != texture_object->internalformat || level >= (GLint)xgu_texture->mipmap_levels) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    GLuint storage_w, storage_h;
+    GLuint level_offset = compressed_level_dim_and_offset(xgu_texture, level, format, &storage_w, &storage_h);
+
+    if ((GLuint)w > storage_w || (GLuint)h > storage_h || (GLuint)xoff > storage_w - (GLuint)w ||
+        (GLuint)yoff > storage_h - (GLuint)h || imageSize != gliCompressedImageSize(w, h, format)) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    if ((xoff & 3) || (yoff & 3) || ((w & 3) && (GLuint)(xoff + w) != storage_w) ||
+        ((h & 3) && (GLuint)(yoff + h) != storage_h)) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (w == 0 || h == 0) {
+        return;
+    }
+
+    if (data == NULL) {
+        gliSetError(GL_INVALID_VALUE);
+        return;
+    }
+
+    GLuint block_size = gliCompressedBlockSize(format);
+    size_t dest_pitch_bytes = (size_t)((storage_w + 3) / 4) * block_size;
+    size_t src_pitch_bytes = (size_t)((w + 3) / 4) * block_size;
+    GLuint sub_blocks_y = (GLuint)((h + 3) / 4);
+    GLubyte *dest =
+        xgu_texture->data + level_offset + (size_t)(yoff / 4) * dest_pitch_bytes + (size_t)(xoff / 4) * block_size;
+    const GLubyte *src = (const GLubyte *)data;
+
+    for (GLuint by = 0; by < sub_blocks_y; by++) {
+        gli_memcpy(dest + by * dest_pitch_bytes, src + by * src_pitch_bytes, src_pitch_bytes);
+    }
+
+    texture_object->texture_object_dirty = GL_TRUE;
 }
 
 // Reads a framebuffer region as tightly packed RGBA (the ES-guaranteed readback format), then repacks it
@@ -1416,6 +1771,7 @@ GL_API void GL_APIENTRY glCopyTexImage2D(
         gliSetError(GL_INVALID_VALUE);
         return;
     }
+
     if (!copy_tex_check_source(width, height)) {
         return;
     }
@@ -1451,14 +1807,19 @@ glCopyTexSubImage2D(GLenum target, GLint level, GLint xoff, GLint yoff, GLint x,
         gliSetError(GL_INVALID_VALUE);
         return;
     }
-    if (!copy_tex_check_source(w, h)) {
-        return;
-    }
-
     GLuint texture_index = context->texture_environment.server_active_texture - GL_TEXTURE0;
     texture_object_t *texture_object = context->texture_environment.texture_units[texture_index].bound_texture_object;
     if (texture_object == NULL || texture_object->texture_name == 0 || texture_object->texture_2d == NULL) {
         gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (gliIsCompressedFormat(texture_object->internalformat)) {
+        gliSetError(GL_INVALID_OPERATION);
+        return;
+    }
+
+    if (!copy_tex_check_source(w, h)) {
         return;
     }
 
