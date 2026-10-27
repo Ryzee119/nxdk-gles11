@@ -545,8 +545,53 @@ GLuint gliEnumtoByteSize(GLenum type);
 void *gli_memcpy(void *dst, const void *src, size_t n);
 void *gli_memset(void *dst, int c, size_t n);
 void gliCalcMipmapChain(GLuint width, GLuint height, GLuint bytes_per_pixel, GLuint *out_size, uint8_t *out_levels);
+void gliCalcCompressedMipmapChain(
+    GLuint width, GLuint height, GLuint block_size, GLuint *out_size, uint8_t *out_levels);
 void gliGenSwizzledMipmaps(xgu_texture_t *xgu_texture);
 void gliCalculateHardwareScissor(gli_context_t *context, GLint *sx, GLint *sy, GLint *sw, GLint *sh);
+
+// S3TC formats are stored as DXT blocks and sampled natively by NV2A
+static inline GLboolean gliIsS3TCFormat(GLenum format)
+{
+    return (format == GL_COMPRESSED_RGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT ||
+            format == GL_COMPRESSED_RGBA_S3TC_DXT3_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT);
+}
+
+// Paletted formats (OES_compressed_paletted_texture, core in ES 1.1) are expanded on the CPU at upload
+static inline GLboolean gliIsPalettedFormat(GLenum format)
+{
+    return (format >= GL_PALETTE4_RGB8_OES && format <= GL_PALETTE8_RGB5_A1_OES);
+}
+
+// Any compressed internal format. Such textures can't be modified by TexSubImage2D/CopyTexSubImage2D,
+// can't have mipmaps generated and aren't color-renderable
+static inline GLboolean gliIsCompressedFormat(GLenum format)
+{
+    return gliIsS3TCFormat(format) || gliIsPalettedFormat(format);
+}
+
+// Whether a texture internal format has an alpha component. For formats without one the GL defines At = 1
+// (ES 1.1 Table 3.9), which the hardware doesn't always give us (e.g. DXT1 decodes as A1R5G5B5)
+static inline GLboolean gliTextureFormatHasAlpha(GLenum format)
+{
+    switch (format) {
+        case GL_ALPHA:
+        case GL_LUMINANCE_ALPHA:
+        case GL_RGBA:
+        case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+        case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+        case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+        case GL_PALETTE4_RGBA8_OES:
+        case GL_PALETTE4_RGBA4_OES:
+        case GL_PALETTE4_RGB5_A1_OES:
+        case GL_PALETTE8_RGBA8_OES:
+        case GL_PALETTE8_RGBA4_OES:
+        case GL_PALETTE8_RGB5_A1_OES:
+            return GL_TRUE;
+        default:
+            return GL_FALSE;
+    }
+}
 
 static inline GLfloat gliFixedtoFloat(GLfixed x)
 {
