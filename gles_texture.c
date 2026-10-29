@@ -2,6 +2,26 @@
 #include "gles_private.h"
 #include <swizzle.h>
 
+// GL_APPLE_texture_2D_limited_npot: a texture with a non power of two size is only complete when it is sampled with
+// GL_CLAMP_TO_EDGE and a non mipmapped minification filter. Incomplete textures act as if texturing was disabled.
+GLboolean gliTextureObjectIsComplete(const texture_object_t *texture_object)
+{
+    const xgu_texture_t *xgu_texture = (const xgu_texture_t *)texture_object->texture_2d;
+    if (xgu_texture == NULL) {
+        return GL_FALSE;
+    }
+
+    const GLboolean npot = (xgu_texture->tex_width & (xgu_texture->tex_width - 1)) != 0 ||
+                           (xgu_texture->tex_height & (xgu_texture->tex_height - 1)) != 0;
+    if (!npot) {
+        return GL_TRUE;
+    }
+
+    const GLenum min_filter = texture_object->min_filter;
+    return texture_object->wrap_s == GL_CLAMP_TO_EDGE && texture_object->wrap_t == GL_CLAMP_TO_EDGE &&
+           (min_filter == GL_NEAREST || min_filter == GL_LINEAR);
+}
+
 texture_object_t *gliFindTextureObject(GLuint name, texture_object_t **prev)
 {
     gli_context_t *context = gliGetContext();
@@ -92,7 +112,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
 
     const GLboolean prev_has_tex =
         (texture_unit->bound_texture_object != &texture_unit->unbound_texture_object &&
-         texture_unit->bound_texture_object != NULL && texture_unit->bound_texture_object->texture_2d != NULL);
+         texture_unit->bound_texture_object != NULL && gliTextureObjectIsComplete(texture_unit->bound_texture_object));
     const xgu_texture_t *prev_xgu =
         prev_has_tex ? (const xgu_texture_t *)texture_unit->bound_texture_object->texture_2d : NULL;
     const GLfloat prev_u_scale = prev_xgu ? prev_xgu->u_scale : 1.0f;
@@ -117,7 +137,7 @@ GL_API void GL_APIENTRY glBindTexture(GLenum target, GLuint texture)
         texture_unit->bound_texture_object = texture_object;
         texture_unit->bound_texture_object->texture_object_dirty = GL_TRUE;
 
-        const GLboolean has_tex = (texture_object->texture_2d != NULL);
+        const GLboolean has_tex = gliTextureObjectIsComplete(texture_object);
         if (has_tex != prev_has_tex) {
             context->texture_environment.combiner_dirty = GL_TRUE;
         }
@@ -291,6 +311,8 @@ GL_API void GL_APIENTRY glTexParameteriv(GLenum target, GLenum pname, const GLin
             return;
     }
     texture_object->texture_object_dirty = GL_TRUE;
+    // The wrap modes and minification filter decide whether an NPOT texture is complete
+    context->texture_environment.combiner_dirty = GL_TRUE;
 }
 
 GL_API void GL_APIENTRY glTexParameterfv(GLenum target, GLenum pname, const GLfloat *params)
@@ -1499,8 +1521,8 @@ void gliTextureFlush(void)
             continue;
         }
 
-        // If the texture unit is disabled or there is no texture bound, skip
-        if (!texture_unit->texture_2d_enabled || !xgu_texture ||
+        // If the texture unit is disabled or there is no complete texture bound, skip
+        if (!texture_unit->texture_2d_enabled || !gliTextureObjectIsComplete(texture_object) ||
             texture_object == &texture_unit->unbound_texture_object) {
             if (!pb) {
                 pb = pb_begin();

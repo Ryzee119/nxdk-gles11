@@ -15,7 +15,7 @@
 #define GLI_EXTENSIONS_STRING                                                                                          \
     "GL_OES_element_index_uint GL_OES_point_size_array GL_OES_framebuffer_object GL_OES_packed_depth_stencil "         \
     "GL_OES_point_sprite GL_OES_blend_subtract GL_OES_blend_equation_separate GL_OES_texture_mirrored_repeat "         \
-    "GL_OES_stencil_wrap"
+    "GL_OES_stencil_wrap GL_APPLE_texture_2D_limited_npot " // Extensions must be space terminated
 
 // For line and point sizes xbox takes a 6.3 fix point, total of 9 bits. Max = 0x1FF / 2^3 = 63.875f
 #define GLI_MAX_ALIASED_POINT_SIZE ((float)0x1FF / (float)(1 << 3))

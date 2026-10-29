@@ -437,8 +437,11 @@ void gliTransformFlush(void)
             } else {
                 mat4 texture_matrix;
                 glm_mat4_copy(*src_tex_mat, texture_matrix);
-                texture_matrix[0][0] *= xgu_texture->u_scale;
-                texture_matrix[1][1] *= xgu_texture->v_scale;
+                // Scales the s and t output rows (including translation) to texel coordinates
+                for (int col = 0; col < 4; col++) {
+                    texture_matrix[col][0] *= xgu_texture->u_scale;
+                    texture_matrix[col][1] *= xgu_texture->v_scale;
+                }
 
                 pb = xgu_set_texture_matrix_enable(pb, i, true);
                 pb = pb_push_transposed_matrix(

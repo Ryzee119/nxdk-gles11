@@ -629,7 +629,7 @@ void combiner_set_texture_env(void)
             const texture_unit_t *tu = &context->texture_environment.texture_units[i];
             const GLboolean stage_active =
                 tu->texture_2d_enabled && tu->bound_texture_object != &tu->unbound_texture_object &&
-                tu->bound_texture_object != NULL && tu->bound_texture_object->texture_2d != NULL;
+                tu->bound_texture_object != NULL && gliTextureObjectIsComplete(tu->bound_texture_object);
             HASH_MIX(stage_active);
             HASH_MIX(tu->tex_env_mode);
             HASH_MIX(FLOAT4_TO_PACKED_ARGB32(tu->tex_env_color));
@@ -676,8 +676,8 @@ void combiner_set_texture_env(void)
 
         if (!texture_unit->texture_2d_enabled || texture_unit->bound_texture_object == NULL ||
             texture_unit->bound_texture_object == &texture_unit->unbound_texture_object ||
-            texture_unit->bound_texture_object->texture_2d == NULL) {
-            // Must match gliTextureFlush: a stage with no image data has no format programmed
+            !gliTextureObjectIsComplete(texture_unit->bound_texture_object)) {
+            // Must match gliTextureFlush: a stage without a complete texture has no format programmed
             continue;
         }
 

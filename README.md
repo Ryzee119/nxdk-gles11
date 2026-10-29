@@ -21,6 +21,7 @@ This is a mostly complete implementation of OpenGL ES 1.1 that works with [nxdk]
 * [x] Subtractive Blending (`GL_OES_blend_subtract`, `GL_OES_blend_equation_separate`)
 * [x] Mirrored Repeat (`GL_OES_texture_mirrored_repeat`)
 * [x] Stencil Wrap (`GL_OES_stencil_wrap`)
+* [x] Limited NPOT Textures (`GL_APPLE_texture_2D_limited_npot`): NPOT textures need `GL_CLAMP_TO_EDGE` and a non-mipmap min filter, otherwise they are incomplete
 * [x] 32-bit Indices (`GL_OES_element_index_uint`)
 * [x] Point Size Arrays (`GL_OES_point_size_array`)
 * [x] Packed Depth Stencil (24Z8S) (`GL_OES_packed_depth_stencil`)

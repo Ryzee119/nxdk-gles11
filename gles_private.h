@@ -512,6 +512,7 @@ typedef struct
 
 void gliFlushStateChange(void);
 texture_object_t *gliFindTextureObject(GLuint name, texture_object_t **prev);
+GLboolean gliTextureObjectIsComplete(const texture_object_t *texture_object);
 framebuffer_object_t *gliFindFramebufferObject(GLuint name, framebuffer_object_t **prev);
 renderbuffer_object_t *gliFindRenderbufferObject(GLuint name, renderbuffer_object_t **prev);
 buffer_object_t *gliFindBufferObject(GLuint name, buffer_object_t **prev);

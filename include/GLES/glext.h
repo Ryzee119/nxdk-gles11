@@ -64,14 +64,14 @@ extern "C" {
 #define GL_OES_texture_cube_map 0
 #define GL_OES_texture_env_crossbar 0
 //#define GL_OES_texture_mirrored_repeat 0
-//#define GL_OES_texture_npot 0
+#define GL_OES_texture_npot 0
 #define GL_OES_vertex_array_object 0
 #define GL_AMD_compressed_3DC_texture 0
 #define GL_AMD_compressed_ATC_texture 0
 #define GL_APPLE_copy_texture_levels 0
 #define GL_APPLE_framebuffer_multisample 0
 #define GL_APPLE_sync 0
-#define GL_APPLE_texture_2D_limited_npot 0
+//#define GL_APPLE_texture_2D_limited_npot 0
 #define GL_APPLE_texture_format_BGRA8888 0
 #define GL_APPLE_texture_max_level 0
 #define GL_ARM_rgba8 0
